@@ -1,0 +1,51 @@
+*.class
+
+# Package Files #
+*.ear
+
+# IntelliJ Files
+*.iml
+*.ipr
+*.iws
+**/.idea
+atlassian-ide-plugin.xml
+
+# NetBeans
+nbproject
+
+# Eclipse
+.classpath
+.project
+.settings
+
+# Buildtools
+build.properties
+mvn.properties
+.checkstyle
+maven-ant-tasks-*.jar
+
+#protege
+**/catalog-v001.xml
+
+# General
+logs
+output
+target
+work
+*.tmp
+thumbs.db
+Thumbs.db
+bin/setenv.*
+
+#application specific
+
+#local config and data
+conf.local
+
+#local package caches
+bower_components/
+node_modules/
+jspm_packages/
+
+#generated files (e.g. styles)
+**/generated/

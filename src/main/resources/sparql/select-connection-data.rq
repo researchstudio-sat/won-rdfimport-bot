@@ -1,0 +1,16 @@
+prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+prefix won: <http://purl.org/webofneeds/model#>
+select ?need ?remoteNeed ?connection ?state ?rated ?ratingProperty ?ratingValue where {
+	?need won:hasConnections/rdfs:member ?connection.
+    ?connection won:hasRemoteNeed ?remoteNeed.
+  	optional {
+      ?connection won:isInState ?state.
+    }
+  	optional {
+      ?connection won:hasFeedbackEvent ?event.
+      ?event won:hasFeedback ?feedback.
+      ?feedback won:forResource ?rated;
+                ?ratingProperty ?ratingValue.
+      filter (?rated != ?ratingValue)
+    }
+}
