@@ -16,32 +16,35 @@
 
 package won.rdfimport;
 
+import org.apache.jena.rdf.model.Model;
+import org.apache.jena.rdf.model.Resource;
 import won.bot.framework.bot.base.EventBot;
+import won.bot.framework.component.needproducer.NeedProducer;
 import won.bot.framework.eventbot.EventListenerContext;
 import won.bot.framework.eventbot.action.BaseEventBotAction;
 import won.bot.framework.eventbot.action.impl.MultipleActions;
 import won.bot.framework.eventbot.action.impl.PublishEventAction;
 import won.bot.framework.eventbot.action.impl.counter.*;
-import won.bot.framework.eventbot.action.impl.listener.UnsubscribeListenerAction;
-import won.bot.framework.eventbot.action.impl.needlifecycle.CreateNeedWithFacetsAction;
+import won.bot.framework.eventbot.action.impl.maintenance.StatisticsLoggingAction;
 import won.bot.framework.eventbot.action.impl.trigger.*;
-import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteConnectCommandAction;
-import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteFeedbackCommandAction;
-import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteOpenCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.*;
 import won.bot.framework.eventbot.bus.EventBus;
 import won.bot.framework.eventbot.event.Event;
-import won.bot.framework.eventbot.event.NeedCreationFailedEvent;
+import won.bot.framework.eventbot.event.impl.command.MessageCommandEvent;
+import won.bot.framework.eventbot.event.impl.command.MessageCommandFailureEvent;
+import won.bot.framework.eventbot.event.impl.command.MessageCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandFailureEvent;
-import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandResultEvent;
+import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandSuccessEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandFailureEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandEvent;
-import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandResultEvent;
+import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.open.OpenCommandEvent;
-import won.bot.framework.eventbot.event.impl.command.open.OpenCommandResultEvent;
-import won.bot.framework.eventbot.event.impl.lifecycle.ActEvent;
+import won.bot.framework.eventbot.event.impl.command.open.OpenCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.lifecycle.InitializeEvent;
 import won.bot.framework.eventbot.event.impl.lifecycle.WorkDoneEvent;
-import won.bot.framework.eventbot.event.impl.needlifecycle.NeedCreatedEvent;
 import won.bot.framework.eventbot.event.impl.needlifecycle.NeedProducerExhaustedEvent;
 import won.bot.framework.eventbot.event.impl.wonmessage.ConnectFromOtherNeedEvent;
 import won.bot.framework.eventbot.filter.impl.TargetCounterFilter;
@@ -50,6 +53,7 @@ import won.bot.framework.eventbot.listener.impl.ActionOnEventListener;
 import won.bot.framework.eventbot.listener.impl.ActionOnFirstEventListener;
 import won.bot.framework.eventbot.listener.impl.ActionOnceAfterNEventsListener;
 import won.protocol.model.Connection;
+import won.protocol.util.WonRdfUtils;
 import won.protocol.vocabulary.WON;
 import won.rdfimport.connectionproducer.ConnectionToCreate;
 import won.rdfimport.connectionproducer.ConnectionToCreateProducer;
@@ -74,11 +78,17 @@ public class RdfImportBot extends EventBot {
 
     @Override
     protected void initializeEventListeners() {
+        boolean skipNeedCreation = false;
         final EventListenerContext ctx = getEventListenerContext();
 
         final EventBus bus = getEventBus();
-
+        Counter messagesInflightCounter = new CounterImpl("messagesInflightCounter");
+        bus.subscribe(MessageCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(MessageCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
+        Counter messageCommandCounter = new CounterImpl("MessageCommandCounter");
+        bus.subscribe(MessageCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messageCommandCounter)));
         final Counter needCreationSuccessfulCounter = new CounterImpl("needsCreated");
+        final Counter needCreationSkippedCounter = new CounterImpl("needCreationSkipped");
         final Counter needCreationFailedCounter = new CounterImpl("needCreationFailed");
         final Counter needCreationStartedCounter = new CounterImpl("creationStarted");
 
@@ -88,24 +98,69 @@ public class RdfImportBot extends EventBot {
 
         Iterator<ConnectionToCreate>[] connectionToCreateIteratorWrapper = new Iterator[1]; //will be created by one of the actions below
 
-        //create needs every trigger execution until the need producer is exhausted
-        EventListener needCreator = new ActionOnEventListener(
-                ctx, "needCreator",
-                new MultipleActions(ctx,
-                        new IncrementCounterAction(ctx, needCreationStartedCounter),
-                        new IncrementCounterAction(ctx, creationUnfinishedCounter),
-                        new CreateNeedWithFacetsAction(ctx, NAME_NEEDS)
-                ),
-                -1
-        );
-        bus.subscribe(ActEvent.class, needCreator);
+        //if we receive a message command failure, log it
+        bus.subscribe(MessageCommandFailureEvent.class, new ActionOnEventListener(ctx, new LogMessageCommandFailureAction(ctx)));
+        //if we receive a message command, execute it
+        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteCreateNeedCommandAction(ctx)));
+        bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteConnectCommandAction(ctx)));
+        bus.subscribe(OpenCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteOpenCommandAction(ctx)));
+        bus.subscribe(FeedbackCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteFeedbackCommandAction(ctx)));
+
+
+        BotTrigger createNeedTrigger = new BotTrigger(ctx, Duration.ofMillis(500));
+        createNeedTrigger.activate();
+
+        bus.subscribe(StartCreatingNeedsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createNeedTrigger))));
+
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createNeedTrigger, new BaseEventBotAction(ctx) {
+            @Override
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
+                int unfinishedCount = creationUnfinishedCounter.getCount();
+                if (unfinishedCount > 100){
+                    return;
+                }
+                if (unfinishedCount > 80){
+                    createNeedTrigger.changeIntervalByFactor(1.05);
+                }
+                if (unfinishedCount < 60 && unfinishedCount >= 0) {
+                    createNeedTrigger.changeIntervalByFactor(0.95);
+                }
+                NeedProducer needProducer = getEventListenerContext().getNeedProducer();
+                Model model = needProducer.create();
+                if (model == null && needProducer.isExhausted()){
+                    bus.publish(new NeedProducerExhaustedEvent());
+                    bus.unsubscribe(executingListener);
+                    return;
+                }
+                URI needUriFromProducer = null;
+                Resource needResource = WonRdfUtils.NeedUtils.getNeedResource(model);
+                if (needResource.isURIResource()) {
+                    needUriFromProducer = URI.create(needResource.getURI().toString());
+                }
+                if (needUriFromProducer != null) {
+                    String needURI = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
+                            needUriFromProducer.toString());
+                    if (needURI != null){
+                        bus.publish(new NeedCreationSkippedEvent());
+                    } else {
+                        bus.publish(new CreateNeedCommandEvent(model, NAME_NEEDS, true, false));
+                    }
+                }
+            }
+        }));
+
+        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new MultipleActions(ctx,
+                new IncrementCounterAction(ctx, needCreationStartedCounter),
+                new IncrementCounterAction(ctx, creationUnfinishedCounter))));
+
+
 
         //when a need is created, we have to remember the association between the need's original URI and the URI it has online
-        bus.subscribe(NeedCreatedEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+        bus.subscribe(CreateNeedCommandSuccessEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
-                if (event instanceof NeedCreatedEvent) {
-                    NeedCreatedEvent needCreatedEvent = (NeedCreatedEvent) event;
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
+                if (event instanceof CreateNeedCommandSuccessEvent) {
+                    CreateNeedCommandSuccessEvent needCreatedEvent = (CreateNeedCommandSuccessEvent) event;
                     getBotContext().saveToObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
                             needCreatedEvent.getNeedUriBeforeCreation().toString(),
                             needCreatedEvent.getNeedURI().toString());
@@ -114,38 +169,42 @@ public class RdfImportBot extends EventBot {
         }));
 
         //also, keep track of what worked and what didn't
-        bus.subscribe(NeedCreationFailedEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationFailedCounter)));
-        bus.subscribe(NeedCreatedEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationSuccessfulCounter)));
+        bus.subscribe(CreateNeedCommandFailureEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationFailedCounter)));
+        bus.subscribe(CreateNeedCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationSuccessfulCounter)));
+        bus.subscribe(NeedCreationSkippedEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationSkippedCounter)));
 
         //when a need is created (or it failed), decrement the halfCreatedNeed counter
         EventListener downCounter = new ActionOnEventListener(ctx, "downCounter",
                 new DecrementCounterAction(ctx, creationUnfinishedCounter));
         //count a successful need creation
-        bus.subscribe(NeedCreatedEvent.class, downCounter);
+        bus.subscribe(CreateNeedCommandSuccessEvent.class, downCounter);
         //if a creation failed, we don't want to keep us from keeping the correct count
-        bus.subscribe(NeedCreationFailedEvent.class, downCounter);
-        //we count the one execution when the creator realizes that the producer is exhausted, we have to count down
-        //once for that, too.
-        bus.subscribe(NeedProducerExhaustedEvent.class, downCounter);
+        bus.subscribe(CreateNeedCommandFailureEvent.class, downCounter);
 
         //just do some logging when a need is created
-        bus.subscribe(NeedCreatedEvent.class, new ActionOnEventListener(ctx, "logger", new BaseEventBotAction(ctx) {
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "creationStatsLogger", createNeedTrigger, new BaseEventBotAction(ctx) {
             volatile int lastOutput = 0;
             volatile long lastOutputMillis = System.currentTimeMillis();
 
             @Override
-            protected void doRun(final Event event) throws Exception {
+            protected void doRun(final Event event, EventListener executingListener) throws Exception {
                 int cnt = needCreationStartedCounter.getCount();
                 long now = System.currentTimeMillis();
-                if (cnt - lastOutput >= 100 || now - lastOutputMillis > 10000) {
-                    int unfinishedCount = creationUnfinishedCounter.getCount();
-                    int successCnt = needCreationSuccessfulCounter.getCount();
-                    int failedCnt = needCreationFailedCounter.getCount();
-                    logger.info("progress on need creation: total:{}, successful: {}, failed: {}, still waiting for response: {}",
+                if (cnt - lastOutput >= 1000 || now - lastOutputMillis > 10000) {
+                    long millisSinceLastOutput = now-lastOutputMillis;
+                    int countSinceLastOutput = cnt-lastOutput;
+                    double countPerSecond = (double) countSinceLastOutput / ((double) millisSinceLastOutput / 1000d);
+                    logger.info("progress on need creation: total:{}, successful: {}, failed: {}, still waiting for response: {}, skipped: {}, messages inflight: {}, create trigger interval: {} millis, millis since last output: {}, started since last ouput: {} ({} per second)",
                             new Object[]{cnt,
-                                    successCnt,
-                                    failedCnt,
-                                    unfinishedCount});
+                                    needCreationSuccessfulCounter.getCount(),
+                                    needCreationFailedCounter.getCount(),
+                                    creationUnfinishedCounter.getCount(),
+                                    needCreationSkippedCounter.getCount(),
+                                    messagesInflightCounter.getCount(),
+                                    createNeedTrigger.getInterval().toMillis(),
+                                    millisSinceLastOutput,
+                                    countSinceLastOutput,
+                                    String.format("%.2f", countPerSecond)});
                     lastOutput = cnt;
                     lastOutputMillis = now;
                 }
@@ -156,7 +215,7 @@ public class RdfImportBot extends EventBot {
         //when they do, the NeedGenerationFinishedEvent is published
         bus.subscribe(NeedProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
                 //when we're called, there probably are need creations unfinished, but there may not be
                 //a)
                 //first, prepare for the case when there are unfinished need creations:
@@ -173,16 +232,13 @@ public class RdfImportBot extends EventBot {
         }));
 
         //When the needproducer is exhausted, stop the creator.
-        getEventBus().subscribe(NeedProducerExhaustedEvent.class, new ActionOnEventListener(ctx,
-                new UnsubscribeListenerAction(
-                        ctx, needCreator)));
-
-
+        getEventBus().subscribe(NeedProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx,
+                new PublishEventAction(ctx, new StopBotTriggerCommandEvent(createNeedTrigger))));
 
         //initialize the connection iterator
-        bus.subscribe(InitializeEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+        bus.subscribe(InitializeEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
                 //initialize an iterator over the connections to be created
                 connectionToCreateIteratorWrapper[0] = connectionToCreateProducer.getConnectionIterator();
                 bus.publish(new ConnectionProducerInitializedEvent());
@@ -191,33 +247,6 @@ public class RdfImportBot extends EventBot {
 
 
         //the connection creator creates one connection each time it runs, data is obtained from the connectionToCreate iterator
-        EventListener connectionCreator = new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
-            @Override
-            protected void doRun(Event event) throws Exception {
-                Iterator<ConnectionToCreate> connectionToCreateIterator = connectionToCreateIteratorWrapper[0];
-                if (connectionToCreateIterator == null) return;
-                if (!connectionToCreateIterator.hasNext()) {
-                    bus.publish(new ConectionProducerExhaustedEvent());
-                    connectionToCreateIteratorWrapper[0] = null;
-                    return;
-                }
-                ConnectionToCreate connectionToCreate = connectionToCreateIterator.next();
-                String ownNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdFrom().getURI().toString());
-                String remoteNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdTo().getURI().toString());
-                if (ownNeedUriString == null){
-                    logger.info("cannot make connection from internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdFrom());
-                    return;
-                }
-                if (remoteNeedUriString == null){
-                    logger.info("cannot make connection to internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdTo());
-                    return;
-                }
-                URI ownNeedURI = URI.create(ownNeedUriString);
-                URI remoteNeedURI = URI.create(remoteNeedUriString);
-                ConnectCommandEvent command = new ConnectCommandEvent(ownNeedURI, remoteNeedURI);
-                bus.publish(command);
-            }
-        });
 
         //wait for two things: need creation to finish and the connection info to be available,
         //then publish the StartCreatingConnectionsCommandEvent
@@ -225,23 +254,63 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(NeedGenerationFinishedEvent.class, connectionCreationStarter);
         bus.subscribe(ConnectionProducerInitializedEvent.class, connectionCreationStarter);
 
-        //when StartCreatingConnectionsCommandEvent is received, register the connectionCreator
-        bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+
+        BotTrigger createConnectionsTrigger = new BotTrigger(ctx, Duration.ofMillis(500));
+        createConnectionsTrigger.activate();
+        bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createConnectionsTrigger))));
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createConnectionsTrigger, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
-                //subscribe to the ActEvent, establishing one connection each time
-                bus.subscribe(ActEvent.class, connectionCreator);
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
+                //cut off if too many messages are already in-flight
+                int inflightCount = messagesInflightCounter.getCount();
+                if (inflightCount > 80) {
+                    return;
+                }
+                //change interval to achieve desired inflight count
+                int desiredInflightCount = 50;
+                int inflightCountDiff = inflightCount - desiredInflightCount;
+                double factor = (double) inflightCountDiff / (double)desiredInflightCount;
+                createConnectionsTrigger.changeIntervalByFactor(1 + 0.001 * factor);
+
+                //create connection
+                Iterator<ConnectionToCreate> connectionToCreateIterator = connectionToCreateIteratorWrapper[0];
+                if (connectionToCreateIterator == null) return;
+
+                ConnectionToCreate connectionToCreate = null;
+                String ownNeedUriString = null;
+                String remoteNeedUriString = null;
+                while (connectionToCreate == null) {
+                    if (!connectionToCreateIterator.hasNext()) {
+                        bus.publish(new ConectionProducerExhaustedEvent());
+                        bus.unsubscribe(executingListener);
+                        connectionToCreateIteratorWrapper[0] = null;
+                        return;
+                    }
+                    connectionToCreate = connectionToCreateIterator.next();
+                    ownNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdFrom().getURI().toString());
+                    remoteNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdTo().getURI().toString());
+                    if (ownNeedUriString == null) {
+                        logger.debug("cannot make connection from internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdFrom());
+                        connectionToCreate = null;
+                    } else if (remoteNeedUriString == null) {
+                        logger.debug("cannot make connection to internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdTo());
+                        connectionToCreate = null;
+                    }
+                }
+
+
+                URI ownNeedURI = URI.create(ownNeedUriString);
+                URI remoteNeedURI = URI.create(remoteNeedUriString);
+                ConnectCommandEvent command = new ConnectCommandEvent(ownNeedURI, remoteNeedURI);
+                bus.publish(command);
             }
         }));
-
-        //when the ConectionProducerExhaustedEvent is exhausted, unsubscribe it
-        bus.subscribe(ConectionProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx, new UnsubscribeListenerAction(ctx, connectionCreator)));
 
         //when the ConnectCommandEvent is published, remember which connection we're creating
         // so we can prepare to receive and accept the incoming connect message
         bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) event;
                 getBotContext().addToListMap(NAME_EXPECTED_INCOMING_CONNECT,
                         connectCommandEvent.getRemoteNeedURI().toString(),
@@ -249,15 +318,13 @@ public class RdfImportBot extends EventBot {
             }
         }));
 
-        //when the ConnectCommandEvent is published, create a connection
-        bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteConnectCommandAction(ctx)));
 
 
         //if the ConnectCommand fails, we have to remote the association between the two needs because the
         //connect we're waiting for will never happen
         bus.subscribe(ConnectCommandFailureEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx){
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectCommandFailureEvent connectCommandFailureEvent = (ConnectCommandFailureEvent) event;
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) connectCommandFailureEvent.getOriginalCommandEvent();
                 getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
@@ -270,7 +337,7 @@ public class RdfImportBot extends EventBot {
         //if so, accept and remove the association from our botContext.
         bus.subscribe(ConnectFromOtherNeedEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectFromOtherNeedEvent connectEvent = (ConnectFromOtherNeedEvent) event;
                 List<Object> expectedUriStrings = getBotContext().loadFromListMap(NAME_EXPECTED_INCOMING_CONNECT, connectEvent.getNeedURI().toString());
                 if (expectedUriStrings == null) {
@@ -282,7 +349,6 @@ public class RdfImportBot extends EventBot {
                     return;
                 }
                 Connection con = connectEvent.getCon();
-                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WON.HAS_BINARY_RATING.getURI()), URI.create(WON.GOOD.getURI())));
                 bus.publish(new OpenCommandEvent(con));
                 getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
                         connectEvent.getRemoteNeedURI().toString(),
@@ -291,35 +357,41 @@ public class RdfImportBot extends EventBot {
             }
         ));
 
-        //open the connection if the OpenCommandEvent is published
-        bus.subscribe(OpenCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteOpenCommandAction(ctx)));
-        //send feedback when the FeedbackCommandEvent is published
-        bus.subscribe(FeedbackCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteFeedbackCommandAction(ctx)));
+
+
+        //we send the feedback after we've received the success response of the open message
+        bus.subscribe(OpenCommandSuccessEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+            @Override
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
+                Connection con = ((OpenCommandSuccessEvent)event).getCon();
+                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WON.HAS_BINARY_RATING.getURI()), URI.create(WON.GOOD.getURI())));
+            }
+        }));
 
 
         //we count connect commands, and we know we're finished as soon as we've seen the results
         // to as many CONNECT, OPEN, and HINT_FEEDBACK messages as we've seen connect commands
         final Counter connectCommandCounter = new CounterImpl("connectCommandCounter");
-        bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx,connectCommandCounter)));
-
         final Counter connectCommandResultCounter = new CounterImpl("connectCommandResultCounter");
-        bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, connectCommandResultCounter)));
         final Counter openCommandResultCounter = new CounterImpl("openCommandResultCounter");
-        bus.subscribe(OpenCommandResultEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, openCommandResultCounter)));
         final Counter feedbackCommandResultCounter = new CounterImpl("feedbackCommandResultCounter");
-        bus.subscribe(FeedbackCommandResultEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, feedbackCommandResultCounter)));
+        bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx,connectCommandCounter)));
+        bus.subscribe(ConnectCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, connectCommandResultCounter)));
+        bus.subscribe(OpenCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, openCommandResultCounter)));
+        bus.subscribe(FeedbackCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, feedbackCommandResultCounter)));
 
 
         //each time one of these counters counts, we check if we're done
         //this listener is registered when creating connections is done
         BotTrigger checkFinishedTrigger = new BotTrigger(ctx, Duration.ofSeconds(10));
         checkFinishedTrigger.activate();
-        //when all the responses have been received, start the trigger that is used for checking if finished
-        bus.subscribe(NeedGenerationFinishedEvent.class, new ActionOnEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(checkFinishedTrigger))));
+        //when we start connecting, also start the trigger that is used for checking if finished
+        bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(checkFinishedTrigger))));
 
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "checkIfFinished", checkFinishedTrigger, new BaseEventBotAction(ctx){
             @Override
-            protected void doRun(Event event) throws Exception {
+            protected void doRun(Event event, EventListener executingListener) throws Exception {
+                if (connectionToCreateIteratorWrapper[0] != null && connectionToCreateIteratorWrapper[0].hasNext()) return;
                 int target = connectCommandCounter.getCount();
                 if (target == 0) {
                     //seems we haven't started connecting yet.
@@ -336,18 +408,45 @@ public class RdfImportBot extends EventBot {
 
         //just do some logging when a command result is received
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "logger2", checkFinishedTrigger, new BaseEventBotAction(ctx) {
+            volatile int lastOutput = 0;
             volatile long lastOutputMillis = System.currentTimeMillis();
 
             @Override
-            protected void doRun(final Event event) throws Exception {
-                    logger.info("progress on connection creation: connects sent: {} connects finished: {}, opens finished: {}, feedbacks finished: {}",
+            protected void doRun(final Event event, EventListener executingListener) throws Exception {
+
+                int cnt = connectCommandCounter.getCount();
+                long now = System.currentTimeMillis();
+                long millisSinceLastOutput = now-lastOutputMillis;
+                int countSinceLastOutput = cnt-lastOutput;
+                double countPerSecond = (double) countSinceLastOutput / ((double) millisSinceLastOutput / 1000d);
+                logger.info("progress on connection creation: connects sent: {} finished: {}, opens finished: {}, feedbacks finished: {}, inflight {}, trigger interval: {} millis, messages sent: {}, millis since last output: {}, started since last ouput: {} ({} per second)",
                             new Object[]{ connectCommandCounter.getCount(),
                                     connectCommandResultCounter.getCount(),
                                     openCommandResultCounter.getCount(),
-                                    feedbackCommandResultCounter.getCount()});
+                                    feedbackCommandResultCounter.getCount(),
+                                    messagesInflightCounter.getCount(),
+                                    createConnectionsTrigger.getInterval().toMillis(),
+                                    messageCommandCounter.getCount(),
+                                    millisSinceLastOutput,
+                                    countSinceLastOutput,
+                                    String.format("%.2f", countPerSecond)
+                            });
+                lastOutput = cnt;
+                lastOutputMillis = now;
             }
         }));
 
+        //show the EventBotStatistics from time to time
+        BotTrigger statisticsLoggingTrigger = new BotTrigger(ctx, Duration.ofMinutes(10));
+        statisticsLoggingTrigger.activate();
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "statslogger", statisticsLoggingTrigger, new StatisticsLoggingAction(ctx)));
+        bus.publish(new StartBotTriggerCommandEvent(statisticsLoggingTrigger));
+
+        if (skipNeedCreation) {
+            bus.publish(new StartCreatingConnectionsCommandEvent());
+        } else {
+            bus.publish(new StartCreatingNeedsCommandEvent());
+        }
     }
 
 
