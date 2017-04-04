@@ -32,16 +32,11 @@
 
     <bean id="rdfImportBot" class="won.rdfimport.RdfImportBot">
 
+        <property name="targetInflightCount" value="${rdfimpor.bot.targetInflightCount}" />
+        <property name="maxInflightCount" value="${rdfimpor.bot.maxInflightCount}" />
+
         <property name="botContext" ref="${botContext.impl}" />
         <property name="taskScheduler" ref="taskScheduler" />
-        <property name="trigger">
-            <bean class="org.springframework.scheduling.support.PeriodicTrigger">
-                <constructor-arg name="period" value="${rdfimport.bot.delayBetweenNeeds}" />
-                <constructor-arg name="timeUnit" value="MILLISECONDS" />
-                <property name="initialDelay" value="3000" /> <!-- wait a while at the beginning -->
-                <property name="fixedRate" value="false" />  <!-- fixed delay after completion -->
-            </bean>
-        </property>
         <property name="needProducer" ref="needProducer" />
         <property name="connectionToCreateProducer">
             <bean class="won.rdfimport.connectionproducer.DirectoryBasedConnectionToCreateProducer">
