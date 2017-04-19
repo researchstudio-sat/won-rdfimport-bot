@@ -6,7 +6,7 @@ The bot reads files from its [configured](conf/rdfimport-bot.properties) input f
 
 The recommended way of configuring the bot is to copy the `conf` folder to `conf.local` and then make changes in that new folder.
 
-The bot also requires a mongodb instance to be running where a user `won` with password `won` has write access to the database `won` (can be configured in [`bot.properties`](conf/bot.properties).
+The bot also requires a mongodb instance to be running where a user `won` with password `won` has write access to the database `won` (can be configured in [`bot.properties`](conf/bot.properties))
 
 
 *Usage*:
