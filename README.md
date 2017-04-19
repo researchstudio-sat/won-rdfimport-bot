@@ -2,7 +2,7 @@ The rdfimport-bot is a command-line tool for importing data present as RDF into 
 
 The RDF data to be imported must be made available as a set of files in any RDF dialect that can be understood by apache jena.
 
-The bot reads files from its [configured](conf/rdfimport-bot.properties) input folder for needs, which are published on the WoN nodes the bot is [configured to use](conf/node-uri-source.properties). Then, the [configured](conf/rdfimport-bot.properties) import folder for conecitons is read in and for each file, one connection is created. 
+The bot reads files from its [configured](conf/rdfimport-bot.properties) input folder for needs, which are published on the WoN nodes the bot is [configured to use](conf/node-uri-source.properties). Then, the [configured](conf/rdfimport-bot.properties) import folder for connections is read in and for each file, one connection is created. 
 
 The recommended way of configuring the bot is to copy the `conf` folder to `conf.local` and then make changes in that new folder.
 
