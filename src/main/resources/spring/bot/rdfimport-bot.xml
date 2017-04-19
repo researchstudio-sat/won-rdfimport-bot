@@ -35,7 +35,7 @@
         <property name="targetInflightCount" value="${rdfimpor.bot.targetInflightCount}" />
         <property name="maxInflightCount" value="${rdfimpor.bot.maxInflightCount}" />
 
-        <property name="botContext" ref="${botContext.impl}" />
+        <property name="botContextWrapper" ref="botContextWrapper" />
         <property name="taskScheduler" ref="taskScheduler" />
         <property name="needProducer" ref="needProducer" />
         <property name="connectionToCreateProducer">
@@ -55,4 +55,8 @@
         </property>
     </bean>
 
+    <bean id="botContextWrapper" class="won.bot.framework.bot.context.BotContextWrapper">
+        <constructor-arg name="botContext" value="${botContext.impl}"/>
+        <constructor-arg name="needCreateListName" value="needs"/>
+    </bean>
 </beans>

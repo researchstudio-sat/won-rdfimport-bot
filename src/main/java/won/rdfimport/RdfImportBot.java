@@ -70,8 +70,6 @@ import java.util.List;
  * Created by fkleedorfer on 21.03.2017.
  */
 public class RdfImportBot extends EventBot {
-
-    private static final String NAME_NEEDS = "needs";
     private static final String NAME_INTERNAL_ID_TO_NEEDS = "id2needs";
     private static final String NAME_EXPECTED_INCOMING_CONNECT = "expectedConnnectFromTo";
     private static final String NAME_PROCESSED_CONNECTIONS = "processedConnectionsFromTo";
@@ -145,12 +143,12 @@ public class RdfImportBot extends EventBot {
                     needUriFromProducer = URI.create(needResource.getURI().toString());
                 }
                 if (needUriFromProducer != null) {
-                    String needURI = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
+                    String needURI = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
                             needUriFromProducer.toString());
                     if (needURI != null) {
                         bus.publish(new NeedCreationSkippedEvent());
                     } else {
-                        bus.publish(new CreateNeedCommandEvent(model, NAME_NEEDS, true, false));
+                        bus.publish(new CreateNeedCommandEvent(model, getBotContextWrapper().getNeedCreateListName(), true, false));
                     }
                 }
             }
@@ -168,7 +166,7 @@ public class RdfImportBot extends EventBot {
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 if (event instanceof CreateNeedCommandSuccessEvent) {
                     CreateNeedCommandSuccessEvent needCreatedEvent = (CreateNeedCommandSuccessEvent) event;
-                    getBotContext().saveToObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
+                    getBotContextWrapper().getBotContext().saveToObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
                             needCreatedEvent.getNeedUriBeforeCreation().toString(),
                             needCreatedEvent.getNeedURI().toString());
                 }
@@ -295,9 +293,9 @@ public class RdfImportBot extends EventBot {
                         return;
                     }
 
-                    ownNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdFrom().getURI().toString());
-                    remoteNeedUriString = (String) getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdTo().getURI().toString());
-                    List<Object> processedConnections = getBotContext().loadFromListMap(NAME_PROCESSED_CONNECTIONS, ownNeedUriString);
+                    ownNeedUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdFrom().getURI().toString());
+                    remoteNeedUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdTo().getURI().toString());
+                    List<Object> processedConnections = getBotContextWrapper().getBotContext().loadFromListMap(NAME_PROCESSED_CONNECTIONS, ownNeedUriString);
                     if (processedConnections.contains(remoteNeedUriString)){
                         //we've already processed this connection in an earlier run of the bot
                         bus.publish(new ConnectionCreationSkippedEvent());
@@ -327,7 +325,7 @@ public class RdfImportBot extends EventBot {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) event;
-                getBotContext().addToListMap(NAME_EXPECTED_INCOMING_CONNECT,
+                getBotContextWrapper().getBotContext().addToListMap(NAME_EXPECTED_INCOMING_CONNECT,
                         connectCommandEvent.getRemoteNeedURI().toString(),
                         connectCommandEvent.getNeedURI().toString());
             }
@@ -342,7 +340,7 @@ public class RdfImportBot extends EventBot {
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectCommandFailureEvent connectCommandFailureEvent = (ConnectCommandFailureEvent) event;
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) connectCommandFailureEvent.getOriginalCommandEvent();
-                getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
+                getBotContextWrapper().getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
                         connectCommandEvent.getRemoteNeedURI().toString(),
                         connectCommandEvent.getNeedURI().toString());
             }
@@ -356,7 +354,7 @@ public class RdfImportBot extends EventBot {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectFromOtherNeedEvent connectEvent = (ConnectFromOtherNeedEvent) event;
-                List<Object> expectedUriStrings = getBotContext().loadFromListMap(NAME_EXPECTED_INCOMING_CONNECT, connectEvent.getNeedURI().toString());
+                List<Object> expectedUriStrings = getBotContextWrapper().getBotContext().loadFromListMap(NAME_EXPECTED_INCOMING_CONNECT, connectEvent.getNeedURI().toString());
                 if (expectedUriStrings == null) {
                     logger.debug("ignoring connect received on behalf of need {} from remote need {} because we're not expecting to be contacted by that need.", connectEvent.getNeedURI(), connectEvent.getRemoteNeedURI());
                     return;
@@ -367,7 +365,7 @@ public class RdfImportBot extends EventBot {
                 }
                 Connection con = connectEvent.getCon();
                 bus.publish(new OpenCommandEvent(con));
-                getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
+                getBotContextWrapper().getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
                         connectEvent.getRemoteNeedURI().toString(),
                         connectEvent.getNeedURI().toString());
                 }
@@ -389,7 +387,7 @@ public class RdfImportBot extends EventBot {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 FeedbackCommandSuccessEvent feedbackCommandSuccessEvent = (FeedbackCommandSuccessEvent) event;
-                getBotContext().addToListMap(NAME_PROCESSED_CONNECTIONS,
+                getBotContextWrapper().getBotContext().addToListMap(NAME_PROCESSED_CONNECTIONS,
                         feedbackCommandSuccessEvent.getNeedURI().toString(),
                         feedbackCommandSuccessEvent.getRemoteNeedURI().toString());
             }
