@@ -36,14 +36,34 @@ rdfimport.bot.importfolder.connections=<folder containing your connections as rd
 
 ## Usage
 
+Windows:
 ```
 mvn install 
 java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-l
 ibs/bcpkix-jdk15on-1.52.jar;target/bouncycastle-libs/bcprov-jdk15on-1.52.jar;target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
 ```
 
-Side note:
+Unix:
+```
+mvn install 
+java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-l
+ibs/bcpkix-jdk15on-1.52.jar:target/bouncycastle-libs/bcprov-jdk15on-1.52.jar:target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
+```
 
+
+
+## Notes
+### So much DEBUG output?
+If you are seeing a lot of log output with loglevel DEBUG, you are probably not passing the configuation parameter `-Dlogback.configurationFile` to the bot or it does not point to the right file. 
+The top of the log output should help you clarify this:
+```
+17:08:22,316 |-INFO in ch.qos.logback.classic.LoggerContext[default] - Found resource [conf.local/logback.xml] at [file:/home/won/workspace/won-rdfimport-bot/conf.local/logback.xml]
+17:08:22,466 |-INFO in ch.qos.logback.classic.joran.action.ConfigurationAction - Setting ReconfigureOnChangeFilter scanning period to 30 seconds
+```
+If you don't see such a line at the top, double check the config param you provide.
+
+
+### Why no executable jar?
 Unfortunately it is not possible to make one big jar with all dependencies because the signatures on the bouncycastle libraries are only accepted by the JVM if the library are used as separate jar files, therefore the command line is a little more verbose than one might expect. 
 
 
