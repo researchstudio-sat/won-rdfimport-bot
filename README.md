@@ -6,6 +6,25 @@ The bot reads files from its [configured](conf/rdfimport-bot.properties) input f
 
 The recommended way of configuring the bot is to copy the `conf` folder to `conf.local` and then make changes in that new folder.
 
+Checklist of config properties to change:
+``` 
+bot.properties: 
+botContext.impl=mongoBotContext
+
+node-uri-source.properties:
+won.node.uris=<your WoN node uris, comma-separated>
+
+owner.properties:
+node.default.scheme=<whatever your default WoN node uses, probably http or https>
+node.default.host=<host of the default WoN node>
+node.default.http.port=<port of the default WoN node, probably 80, 443, 8080, or 8443>
+
+rdfimport-bot.properties:
+rdfimport.bot.importfolder.needs=<folder containing your needs as ttl files>
+rdfimport.bot.importfolder.connections=<folder containing your connections as ttl files>
+
+```
+
 The bot also requires a mongodb instance to be running where a user `won` with password `won` has write access to the database `won` (can be configured in [`bot.properties`](conf/bot.properties))
 
 
