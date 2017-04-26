@@ -60,7 +60,7 @@ The top of the log output should help you clarify this:
 17:08:22,316 |-INFO in ch.qos.logback.classic.LoggerContext[default] - Found resource [conf.local/logback.xml] at [file:/home/won/workspace/won-rdfimport-bot/conf.local/logback.xml]
 17:08:22,466 |-INFO in ch.qos.logback.classic.joran.action.ConfigurationAction - Setting ReconfigureOnChangeFilter scanning period to 30 seconds
 ```
-If you don't see such a line at the top, double check the config param you provide.
+If you don't see such a line at the top, double check the config param you provide. If you do, look into that file, it probably sets the loglevel to DEBUG.
 
 
 ### Why no executable jar?
