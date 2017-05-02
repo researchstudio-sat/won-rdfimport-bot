@@ -39,15 +39,13 @@ rdfimport.bot.importfolder.connections=<folder containing your connections as rd
 Windows:
 ```
 mvn install 
-java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-l
-ibs/bcpkix-jdk15on-1.52.jar;target/bouncycastle-libs/bcprov-jdk15on-1.52.jar;target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
+java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-libs/bcpkix-jdk15on-1.52.jar;target/bouncycastle-libs/bcprov-jdk15on-1.52.jar;target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
 ```
 
 Unix:
 ```
 mvn install 
-java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-l
-ibs/bcpkix-jdk15on-1.52.jar:target/bouncycastle-libs/bcprov-jdk15on-1.52.jar:target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
+java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-libs/bcpkix-jdk15on-1.52.jar:target/bouncycastle-libs/bcprov-jdk15on-1.52.jar:target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
 ```
 
 
