@@ -56,7 +56,7 @@
     </bean>
 
     <bean id="botContextWrapper" class="won.bot.framework.bot.context.BotContextWrapper">
-        <constructor-arg name="botContext" value="${botContext.impl}"/>
-        <constructor-arg name="needCreateListName" value="needs"/>
+        <constructor-arg name="botContext" ref="${botContext.impl}"/>
+        <constructor-arg name="botName" value="rdfImportBot"/>
     </bean>
 </beans>
