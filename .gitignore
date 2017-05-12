@@ -40,7 +40,9 @@ bin/setenv.*
 #application specific
 
 #local config and data
-conf.*
+conf.local
+conf.integrationtest
+conf.vsecz
 
 #local package caches
 bower_components/
