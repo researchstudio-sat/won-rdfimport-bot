@@ -36,20 +36,29 @@ rdfimport.bot.importfolder.connections=<folder containing your connections as rd
 
 ## Usage
 
+### Preparation: 
+
+1. Build Web of Needs artifacts:
+
 Before building and running the bot, the [Web of Needs](https://github.com/researchstudio-sat/webofneeds/) artifacts have to be in the local maven repository. This is done by checking out that project and [building it once](https://github.com/researchstudio-sat/webofneeds/blob/master/documentation/building-with-maven.md) TL;DR: use this maven command in the webofneeds project directory:
 ```
 mvn install -P skip-frontend,skip-matcher-uberjar,skip-bot-uberjar,skip-matcher-rescal-uberjar,skip-node-webapp-war,skip-owner-webapp-war,skip-tests
 ``` 
 
-Windows:
+2. Build the bot
+
+In the won-rdfimport-bot directory, build the project:
 ```
 mvn install 
+```
+
+### Running on Windows:
+```
 java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-libs/bcpkix-jdk15on-1.52.jar;target/bouncycastle-libs/bcprov-jdk15on-1.52.jar;target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
 ```
 
-Unix:
+### Running on Unix:
 ```
-mvn install 
 java -DWON_CONFIG_DIR=conf.local -Dlogback.configurationFile=conf.local/logback.xml -classpath "target/bouncycastle-libs/bcpkix-jdk15on-1.52.jar:target/bouncycastle-libs/bcprov-jdk15on-1.52.jar:target/rdfimport-bot.jar" won.rdfimport.RdfImportBotApp 
 ```
 
