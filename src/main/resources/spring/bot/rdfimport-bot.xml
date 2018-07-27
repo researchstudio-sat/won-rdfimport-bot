@@ -41,17 +41,17 @@
         <property name="connectionToCreateProducer">
             <bean class="won.rdfimport.connectionproducer.DirectoryBasedConnectionToCreateProducer">
                 <property name="directory" value="${rdfimport.bot.importfolder.connections}" />
-                <property name="filenameFilterRegex" value="^[^\.].+\.ttl" />
+                <property name="filenameFilterRegex" value="^[^\.].+\.trig" />
             </bean>
         </property>
     </bean>
 
     <bean id="needProducer" class="won.bot.framework.component.needproducer.impl.DirectoryBasedNeedProducer">
         <property name="directory" value="${rdfimport.bot.importfolder.needs}"/>
-        <property name="filenameFilterRegex" value="^[^\.].*\.ttl"/>
+        <property name="filenameFilterRegex" value="^[^\.].*\.trig"/>
         <property name="repeat" value="false"/>
         <property name="fileBasedNeedProducer">
-            <bean class="won.bot.framework.component.needproducer.impl.TurtleFileNeedProducer"/>
+            <bean class="won.bot.framework.component.needproducer.impl.TrigFileNeedProducer"/>
         </property>
     </bean>
 
