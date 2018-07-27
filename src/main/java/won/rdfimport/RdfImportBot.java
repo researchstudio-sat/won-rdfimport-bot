@@ -18,6 +18,7 @@ package won.rdfimport;
 
 import java.net.URI;
 import java.time.Duration;
+import java.time.temporal.TemporalUnit;
 import java.util.Iterator;
 import java.util.List;
 
@@ -146,10 +147,10 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createNeedTrigger, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
+                adjustTriggerInterval(createNeedTrigger, messagesInflightCounter);
                 if (isTooManyMessagesInflight(messagesInflightCounter)) {
                     return;
                 }
-                adjustTriggerInterval(createNeedTrigger, messagesInflightCounter);
                 NeedProducer needProducer = getEventListenerContext().getNeedProducer();
                 Dataset model = needProducer.create();
                 if (model == null && needProducer.isExhausted()) {
@@ -484,7 +485,7 @@ public class RdfImportBot extends EventBot {
         }));
 
         //show the EventBotStatistics from time to time
-        BotTrigger statisticsLoggingTrigger = new BotTrigger(ctx, Duration.ofMinutes(10));
+        BotTrigger statisticsLoggingTrigger = new BotTrigger(ctx, Duration.ofSeconds(30));
         statisticsLoggingTrigger.activate();
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "statslogger", statisticsLoggingTrigger, new StatisticsLoggingAction(ctx)));
         bus.publish(new StartBotTriggerCommandEvent(statisticsLoggingTrigger));
@@ -509,7 +510,7 @@ public class RdfImportBot extends EventBot {
         int desiredInflightCount = targetInflightCount;
         int inflightCountDiff = targetCounter.getCount() - desiredInflightCount;
         double factor = (double) inflightCountDiff / (double)desiredInflightCount;
-        createConnectionsTrigger.changeIntervalByFactor(1 + 0.001 * factor);
+        createConnectionsTrigger.changeIntervalByFactor(1 + 0.01 * factor, Duration.ofSeconds(10));
     }
 
 
