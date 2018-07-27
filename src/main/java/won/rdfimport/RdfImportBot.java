@@ -16,18 +16,37 @@
 
 package won.rdfimport;
 
-import org.apache.jena.rdf.model.Model;
+import java.net.URI;
+import java.time.Duration;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.jena.query.Dataset;
 import org.apache.jena.rdf.model.Resource;
+
 import won.bot.framework.bot.base.EventBot;
 import won.bot.framework.component.needproducer.NeedProducer;
 import won.bot.framework.eventbot.EventListenerContext;
 import won.bot.framework.eventbot.action.BaseEventBotAction;
 import won.bot.framework.eventbot.action.impl.MultipleActions;
 import won.bot.framework.eventbot.action.impl.PublishEventAction;
-import won.bot.framework.eventbot.action.impl.counter.*;
+import won.bot.framework.eventbot.action.impl.counter.Counter;
+import won.bot.framework.eventbot.action.impl.counter.CounterImpl;
+import won.bot.framework.eventbot.action.impl.counter.DecrementCounterAction;
+import won.bot.framework.eventbot.action.impl.counter.IncrementCounterAction;
+import won.bot.framework.eventbot.action.impl.counter.TargetCountReachedEvent;
+import won.bot.framework.eventbot.action.impl.counter.TargetCounterDecorator;
 import won.bot.framework.eventbot.action.impl.maintenance.StatisticsLoggingAction;
-import won.bot.framework.eventbot.action.impl.trigger.*;
-import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.*;
+import won.bot.framework.eventbot.action.impl.trigger.ActionOnTriggerEventListener;
+import won.bot.framework.eventbot.action.impl.trigger.BotTrigger;
+import won.bot.framework.eventbot.action.impl.trigger.BotTriggerEvent;
+import won.bot.framework.eventbot.action.impl.trigger.StartBotTriggerCommandEvent;
+import won.bot.framework.eventbot.action.impl.trigger.StopBotTriggerCommandEvent;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteConnectCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteCreateNeedCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteFeedbackCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteOpenCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.LogMessageCommandFailureAction;
 import won.bot.framework.eventbot.bus.EventBus;
 import won.bot.framework.eventbot.event.Event;
 import won.bot.framework.eventbot.event.impl.command.MessageCommandEvent;
@@ -58,12 +77,13 @@ import won.protocol.util.WonRdfUtils;
 import won.protocol.vocabulary.WON;
 import won.rdfimport.connectionproducer.ConnectionToCreate;
 import won.rdfimport.connectionproducer.ConnectionToCreateProducer;
-import won.rdfimport.event.*;
-
-import java.net.URI;
-import java.time.Duration;
-import java.util.Iterator;
-import java.util.List;
+import won.rdfimport.event.ConectionProducerExhaustedEvent;
+import won.rdfimport.event.ConnectionCreationSkippedEvent;
+import won.rdfimport.event.ConnectionProducerInitializedEvent;
+import won.rdfimport.event.NeedCreationSkippedEvent;
+import won.rdfimport.event.NeedGenerationFinishedEvent;
+import won.rdfimport.event.StartCreatingConnectionsCommandEvent;
+import won.rdfimport.event.StartCreatingNeedsCommandEvent;
 
 
 /**
@@ -131,7 +151,7 @@ public class RdfImportBot extends EventBot {
                 }
                 adjustTriggerInterval(createNeedTrigger, messagesInflightCounter);
                 NeedProducer needProducer = getEventListenerContext().getNeedProducer();
-                Model model = needProducer.create();
+                Dataset model = needProducer.create();
                 if (model == null && needProducer.isExhausted()) {
                     bus.publish(new NeedProducerExhaustedEvent());
                     bus.unsubscribe(executingListener);
