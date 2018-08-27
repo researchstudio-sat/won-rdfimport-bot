@@ -32,8 +32,8 @@
 
     <bean id="rdfImportBot" class="won.rdfimport.RdfImportBot">
 
-        <property name="targetInflightCount" value="${rdfimpor.bot.targetInflightCount}" />
-        <property name="maxInflightCount" value="${rdfimpor.bot.maxInflightCount}" />
+        <property name="targetInflightCount" value="${rdfimport.bot.targetInflightCount}" />
+        <property name="maxInflightCount" value="${rdfimport.bot.maxInflightCount}" />
 
         <property name="botContextWrapper" ref="botContextWrapper" />
         <property name="taskScheduler" ref="taskScheduler" />
