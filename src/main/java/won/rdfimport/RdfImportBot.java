@@ -39,8 +39,10 @@ import won.bot.framework.eventbot.action.impl.counter.TargetCountReachedEvent;
 import won.bot.framework.eventbot.action.impl.counter.TargetCounterDecorator;
 import won.bot.framework.eventbot.action.impl.maintenance.StatisticsLoggingAction;
 import won.bot.framework.eventbot.action.impl.trigger.ActionOnTriggerEventListener;
+import won.bot.framework.eventbot.action.impl.trigger.AddFiringsAction;
 import won.bot.framework.eventbot.action.impl.trigger.BotTrigger;
 import won.bot.framework.eventbot.action.impl.trigger.BotTriggerEvent;
+import won.bot.framework.eventbot.action.impl.trigger.FireCountLimitedBotTrigger;
 import won.bot.framework.eventbot.action.impl.trigger.StartBotTriggerCommandEvent;
 import won.bot.framework.eventbot.action.impl.trigger.StopBotTriggerCommandEvent;
 import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteConnectCommandAction;
@@ -55,9 +57,11 @@ import won.bot.framework.eventbot.event.impl.command.MessageCommandFailureEvent;
 import won.bot.framework.eventbot.event.impl.command.MessageCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandFailureEvent;
+import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandFailureEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandSuccessEvent;
@@ -75,6 +79,7 @@ import won.bot.framework.eventbot.listener.impl.ActionOnFirstEventListener;
 import won.bot.framework.eventbot.listener.impl.ActionOnceAfterNEventsListener;
 import won.protocol.model.Connection;
 import won.protocol.util.WonRdfUtils;
+import won.protocol.vocabulary.CNT;
 import won.protocol.vocabulary.WON;
 import won.rdfimport.connectionproducer.ConnectionToCreate;
 import won.rdfimport.connectionproducer.ConnectionToCreateProducer;
@@ -97,8 +102,8 @@ public class RdfImportBot extends EventBot {
 
     private ConnectionToCreateProducer connectionToCreateProducer;
 
-    private int targetInflightCount = 30;
-    private int maxInflightCount = 50;
+    private int targetInflightCount = 5;
+    private int maxInflightCount = 10;
 
     public void setTargetInflightCount(int targetInflightCount) {
         this.targetInflightCount = targetInflightCount;
@@ -115,15 +120,17 @@ public class RdfImportBot extends EventBot {
 
         final EventBus bus = getEventBus();
         Counter messagesInflightCounter = new CounterImpl("messagesInflightCounter");
-        bus.subscribe(MessageCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
-        bus.subscribe(MessageCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(CreateNeedCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
         Counter messageCommandCounter = new CounterImpl("MessageCommandCounter");
         bus.subscribe(MessageCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messageCommandCounter)));
         final Counter needCreationSuccessfulCounter = new CounterImpl("needsCreated");
         final Counter needCreationSkippedCounter = new CounterImpl("needCreationSkipped");
         final Counter needCreationFailedCounter = new CounterImpl("needCreationFailed");
         final Counter needCreationStartedCounter = new CounterImpl("creationStarted");
-
+        
         //create a targeted counter that will publish an event when the target is reached
         //in this case, 0 unfinished need creations means that all needs were created
         final TargetCounterDecorator creationUnfinishedCounter = new TargetCounterDecorator(ctx, new CounterImpl("creationUnfinished"), 0);
@@ -138,8 +145,10 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(OpenCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteOpenCommandAction(ctx)));
         bus.subscribe(FeedbackCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteFeedbackCommandAction(ctx)));
 
-
-        BotTrigger createNeedTrigger = new BotTrigger(ctx, Duration.ofMillis(100));
+        //use a trigger that can only fire N times before being allowed more firings (controlling the speed)
+        FireCountLimitedBotTrigger createNeedTrigger = new FireCountLimitedBotTrigger(ctx, Duration.ofMillis(100), maxInflightCount);
+        // each time we hear back from a connect, allow the trigger to fire once more
+        bus.subscribe(CreateNeedCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createNeedTrigger, 1)));
         createNeedTrigger.activate();
 
         bus.subscribe(StartCreatingNeedsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createNeedTrigger))));
@@ -147,10 +156,6 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createNeedTrigger, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                adjustTriggerInterval(createNeedTrigger, messagesInflightCounter);
-                if (isTooManyMessagesInflight(messagesInflightCounter)) {
-                    return;
-                }
                 NeedProducer needProducer = getEventListenerContext().getNeedProducer();
                 Dataset model = needProducer.create();
                 if (model == null && needProducer.isExhausted()) {
@@ -169,7 +174,7 @@ public class RdfImportBot extends EventBot {
                     if (needURI != null) {
                         bus.publish(new NeedCreationSkippedEvent());
                     } else {
-                        bus.publish(new CreateNeedCommandEvent(model, getBotContextWrapper().getNeedCreateListName(), true, false));
+                        bus.publish(new CreateNeedCommandEvent(model, getBotContextWrapper().getNeedCreateListName(), false, false));
                     }
                 }
             }
@@ -209,6 +214,7 @@ public class RdfImportBot extends EventBot {
 
         //trigger statistics logging about need generation
         BotTrigger needCreationStatsLoggingTrigger = new BotTrigger(ctx, Duration.ofSeconds(10));
+        
         needCreationStatsLoggingTrigger.activate();
         bus.subscribe(StartCreatingNeedsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(needCreationStatsLoggingTrigger))));
         //just do some logging when a need is created
@@ -223,13 +229,14 @@ public class RdfImportBot extends EventBot {
                 long millisSinceLastOutput = now-lastOutputMillis;
                 int countSinceLastOutput = cnt-lastOutput;
                 double countPerSecond = (double) countSinceLastOutput / ((double) millisSinceLastOutput / 1000d);
-                logger.info("progress on need creation: total:{}, successful: {}, failed: {}, still waiting for response: {}, skipped: {}, messages inflight: {}, create trigger interval: {} millis, millis since last output: {}, started since last ouput: {} ({} per second)",
+                logger.info("progress on need creation: total:{}, successful: {}, failed: {}, still waiting for response: {}, skipped: {}, messages inflight: {} (max: {}), create trigger delay: {} millis, millis since last output: {}, started since last ouput: {} ({} per second)",
                         new Object[]{cnt,
                                 needCreationSuccessfulCounter.getCount(),
                                 needCreationFailedCounter.getCount(),
                                 creationUnfinishedCounter.getCount(),
                                 needCreationSkippedCounter.getCount(),
                                 messagesInflightCounter.getCount(),
+                                maxInflightCount,
                                 createNeedTrigger.getInterval().toMillis(),
                                 millisSinceLastOutput,
                                 countSinceLastOutput,
@@ -285,19 +292,24 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(NeedGenerationFinishedEvent.class, connectionCreationStarter);
         bus.subscribe(ConnectionProducerInitializedEvent.class, connectionCreationStarter);
 
+        //use a trigger that can only fire N times before being allowed more firings (controlling the speed)
+        FireCountLimitedBotTrigger createConnectionsTrigger = new FireCountLimitedBotTrigger(ctx, Duration.ofMillis(100), maxInflightCount);
+        // each time we hear back from a connect, allow the trigger to fire once more
+        bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createNeedTrigger, 1)));
 
-        BotTrigger createConnectionsTrigger = new BotTrigger(ctx, Duration.ofMillis(100));
-        createConnectionsTrigger.activate();
+        //start the connections trigger when we are done creating needs.
+        bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
+          @Override
+          protected void doRun(Event event, EventListener executingListener) throws Exception {
+            createConnectionsTrigger.activate();
+          }
+        }));
+        
+
         bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createConnectionsTrigger))));
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createConnectionsTrigger, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                if (isTooManyMessagesInflight(messagesInflightCounter)){
-                    return;
-                }
-                adjustTriggerInterval(createConnectionsTrigger, messagesInflightCounter);
-
-
                 //create connection
                 Iterator<ConnectionToCreate> connectionToCreateIterator = connectionToCreateIteratorWrapper[0];
                 if (connectionToCreateIterator == null) return;
@@ -466,13 +478,14 @@ public class RdfImportBot extends EventBot {
                 long millisSinceLastOutput = now-lastOutputMillis;
                 int countSinceLastOutput = cnt-lastOutput;
                 double countPerSecond = (double) countSinceLastOutput / ((double) millisSinceLastOutput / 1000d);
-                logger.info("progress on connection creation: connects sent: {} finished: {}, opens finished: {}, feedbacks finished: {}, skipped: {}, inflight {}, trigger interval: {} millis, messages sent: {}, millis since last output: {}, started since last ouput: {} ({} per second)",
+                logger.info("progress on connection creation: connects sent: {} finished: {}, opens finished: {}, feedbacks finished: {}, skipped: {}, inflight {} (max: {}), connect trigger delay: {} millis, messages sent: {}, millis since last output: {}, started since last ouput: {} ({} per second)",
                             new Object[]{ connectCommandCounter.getCount(),
                                     connectCommandResultCounter.getCount(),
                                     openCommandResultCounter.getCount(),
                                     feedbackCommandResultCounter.getCount(),
                                     connectSkippedCounter.getCount(),
                                     messagesInflightCounter.getCount(),
+                                    maxInflightCount,
                                     createConnectionsTrigger.getInterval().toMillis(),
                                     messageCommandCounter.getCount(),
                                     millisSinceLastOutput,
@@ -504,15 +517,7 @@ public class RdfImportBot extends EventBot {
         }
         return false;
     }
-
-    private void adjustTriggerInterval(BotTrigger createConnectionsTrigger, Counter targetCounter) {
-        //change interval to achieve desired inflight count
-        int desiredInflightCount = targetInflightCount;
-        int inflightCountDiff = targetCounter.getCount() - desiredInflightCount;
-        double factor = (double) inflightCountDiff / (double)desiredInflightCount;
-        createConnectionsTrigger.changeIntervalByFactor(1 + 0.01 * factor, Duration.ofSeconds(10));
-    }
-
+   
 
     public void setConnectionToCreateProducer(ConnectionToCreateProducer connectionToCreateProducer) {
         this.connectionToCreateProducer = connectionToCreateProducer;
