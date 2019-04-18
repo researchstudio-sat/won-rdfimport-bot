@@ -37,7 +37,7 @@
 
         <property name="botContextWrapper" ref="botContextWrapper" />
         <property name="taskScheduler" ref="taskScheduler" />
-        <property name="needProducer" ref="needProducer" />
+        <property name="atomProducer" ref="atomProducer" />
         <property name="connectionToCreateProducer">
             <bean class="won.rdfimport.connectionproducer.DirectoryBasedConnectionToCreateProducer">
                 <property name="directory" value="${rdfimport.bot.importfolder.connections}" />
@@ -46,12 +46,12 @@
         </property>
     </bean>
 
-    <bean id="needProducer" class="won.bot.framework.component.needproducer.impl.DirectoryBasedNeedProducer">
-        <property name="directory" value="${rdfimport.bot.importfolder.needs}"/>
+    <bean id="atomProducer" class="won.bot.framework.component.atomproducer.impl.DirectoryBasedAtomProducer">
+        <property name="directory" value="${rdfimport.bot.importfolder.atoms}"/>
         <property name="filenameFilterRegex" value="^[^\.].*\.trig"/>
         <property name="repeat" value="false"/>
-        <property name="fileBasedNeedProducer">
-            <bean class="won.bot.framework.component.needproducer.impl.TrigFileNeedProducer"/>
+        <property name="fileBasedAtomProducer">
+            <bean class="won.bot.framework.component.atomproducer.impl.TrigFileAtomProducer"/>
         </property>
     </bean>
 

@@ -19,7 +19,7 @@ package won.rdfimport.event;
 import won.bot.framework.eventbot.event.BaseEvent;
 
 /**
- * Indicates that the bot should start creating needs.
+ * Indicates that the bot should start creating atoms.
  */
-public class StartCreatingNeedsCommandEvent extends BaseEvent{
+public class StartCreatingAtomsCommandEvent extends BaseEvent{
 }

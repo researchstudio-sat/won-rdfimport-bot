@@ -7,9 +7,9 @@ The bot must be able to make a network connection to at least one WoN node. It i
 ## Configuration
 The recommended way of configuring the bot is to copy the `conf` folder to `conf.local` and then make changes in that new folder.
 
-The bot reads files from its [configured](conf/rdfimport-bot.properties) input folder for needs, which are published on the WoN nodes the bot is [configured to use](conf/node-uri-source.properties). Then, the [configured](conf/rdfimport-bot.properties) import folder for connections is read in and for each file, one connection is created. 
+The bot reads files from its [configured](conf/rdfimport-bot.properties) input folder for atoms, which are published on the WoN nodes the bot is [configured to use](conf/node-uri-source.properties). Then, the [configured](conf/rdfimport-bot.properties) import folder for connections is read in and for each file, one connection is created. 
 
-With the default configuration, the bot keeps its application state in memory, so it cannot keep state over multiple consecutive runs. Changing the config property `botContext.impl` to `mongoBotContext` in [`bot.properties`](conf/bot.properties)) tells the bot to store its application state in the configured mongo db instance (default: user `won`, password `won`, which needs write access to the database `won`). Doing that will cause the bot to skip creating needs and connections it has already created in an earlier run. 
+With the default configuration, the bot keeps its application state in memory, so it cannot keep state over multiple consecutive runs. Changing the config property `botContext.impl` to `mongoBotContext` in [`bot.properties`](conf/bot.properties)) tells the bot to store its application state in the configured mongo db instance (default: user `won`, password `won`, which atoms write access to the database `won`). Doing that will cause the bot to skip creating atoms and connections it has already created in an earlier run. 
 
 
 
@@ -27,7 +27,7 @@ node.default.host=<host of the default WoN node>
 node.default.http.port=<port of the default WoN node, probably 80, 443, 8080, or 8443>
 
 rdfimport-bot.properties:
-rdfimport.bot.importfolder.needs=<folder containing your needs as rdf files>
+rdfimport.bot.importfolder.atoms=<folder containing your atoms as rdf files>
 rdfimport.bot.importfolder.connections=<folder containing your connections as rdf files>
 
 ```

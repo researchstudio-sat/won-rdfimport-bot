@@ -49,8 +49,8 @@ public class ConnectionToCreateFromRdfProducer {
             ResultSet results = qexec.execSelect() ;
             if (!results.hasNext()) throw new IllegalArgumentException("could not extract connection data from specified model");
             QuerySolution soln = results.nextSolution() ;
-            Resource need = soln.getResource("need") ;
-            Resource remoteNeed = soln.getResource("remoteNeed") ;
+            Resource atom = soln.getResource("atom") ;
+            Resource targetAtom = soln.getResource("targetAtom") ;
             Resource connection = soln.getResource("connection");
             Resource state = null;
             ConnectionState connectionState = null;
@@ -66,7 +66,7 @@ public class ConnectionToCreateFromRdfProducer {
                 feedback = new ConnectionToCreate.Feedback(rated, ratingProperty, value);
             }
             if (results.hasNext()) throw new IllegalArgumentException("more than one solution found for connection data in specified model");
-            return new ConnectionToCreate(need, remoteNeed, connection, connectionState, feedback);
+            return new ConnectionToCreate(atom, targetAtom, connection, connectionState, feedback);
         }
     }
 }

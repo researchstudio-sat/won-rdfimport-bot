@@ -25,10 +25,10 @@ import won.protocol.model.ConnectionState;
  * Created by fkleedorfer on 23.03.2017.
  */
 public class ConnectionToCreate {
-    //the internal id (i.e. not expected to be valid on the Web) of the own need to connect
+    //the internal id (i.e. not expected to be valid on the Web) of the own atom to connect
     private Resource internalIdFrom;
 
-    //the internal id (i.e. not expected to be valid on the Web) of the 'remote need to connect to
+    //the internal id (i.e. not expected to be valid on the Web) of the 'remote atom to connect to
     private Resource internalIdTo;
 
     //the intnernal id (i.e. not expected to be valid on the Web) of the connection

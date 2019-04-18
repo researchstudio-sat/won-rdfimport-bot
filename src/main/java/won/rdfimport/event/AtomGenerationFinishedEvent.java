@@ -19,7 +19,7 @@ package won.rdfimport.event;
 import won.bot.framework.eventbot.event.BaseEvent;
 
 /**
- * Indicates that generating the needs is finished, i.e., we have received all the responses for all needs.
+ * Indicates that generating the atoms is finished, i.e., we have received all the responses for all atoms.
  */
-public class NeedGenerationFinishedEvent extends BaseEvent{
+public class AtomGenerationFinishedEvent extends BaseEvent{
 }
