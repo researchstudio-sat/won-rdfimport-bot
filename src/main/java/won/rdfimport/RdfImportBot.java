@@ -26,7 +26,7 @@ import org.apache.jena.query.Dataset;
 import org.apache.jena.rdf.model.Resource;
 
 import won.bot.framework.bot.base.EventBot;
-import won.bot.framework.component.needproducer.NeedProducer;
+import won.bot.framework.component.atomproducer.AtomProducer;
 import won.bot.framework.eventbot.EventListenerContext;
 import won.bot.framework.eventbot.action.BaseEventBotAction;
 import won.bot.framework.eventbot.action.impl.MultipleActions;
@@ -46,7 +46,7 @@ import won.bot.framework.eventbot.action.impl.trigger.FireCountLimitedBotTrigger
 import won.bot.framework.eventbot.action.impl.trigger.StartBotTriggerCommandEvent;
 import won.bot.framework.eventbot.action.impl.trigger.StopBotTriggerCommandEvent;
 import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteConnectCommandAction;
-import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteCreateNeedCommandAction;
+import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteCreateAtomCommandAction;
 import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteFeedbackCommandAction;
 import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.ExecuteOpenCommandAction;
 import won.bot.framework.eventbot.action.impl.wonmessage.execCommand.LogMessageCommandFailureAction;
@@ -59,19 +59,19 @@ import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandEvent
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandFailureEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandSuccessEvent;
-import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandEvent;
-import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandFailureEvent;
-import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandResultEvent;
-import won.bot.framework.eventbot.event.impl.command.create.CreateNeedCommandSuccessEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateAtomCommandEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateAtomCommandFailureEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateAtomCommandResultEvent;
+import won.bot.framework.eventbot.event.impl.command.create.CreateAtomCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.feedback.FeedbackCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.command.open.OpenCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.open.OpenCommandSuccessEvent;
 import won.bot.framework.eventbot.event.impl.lifecycle.InitializeEvent;
 import won.bot.framework.eventbot.event.impl.lifecycle.WorkDoneEvent;
-import won.bot.framework.eventbot.event.impl.needlifecycle.NeedProducerExhaustedEvent;
-import won.bot.framework.eventbot.event.impl.wonmessage.ConnectFromOtherNeedEvent;
-import won.bot.framework.eventbot.event.impl.wonmessage.OpenFromOtherNeedEvent;
+import won.bot.framework.eventbot.event.impl.atomlifecycle.AtomProducerExhaustedEvent;
+import won.bot.framework.eventbot.event.impl.wonmessage.ConnectFromOtherAtomEvent;
+import won.bot.framework.eventbot.event.impl.wonmessage.OpenFromOtherAtomEvent;
 import won.bot.framework.eventbot.filter.impl.TargetCounterFilter;
 import won.bot.framework.eventbot.listener.EventListener;
 import won.bot.framework.eventbot.listener.impl.ActionOnEventListener;
@@ -86,17 +86,17 @@ import won.rdfimport.connectionproducer.ConnectionToCreateProducer;
 import won.rdfimport.event.ConectionProducerExhaustedEvent;
 import won.rdfimport.event.ConnectionCreationSkippedEvent;
 import won.rdfimport.event.ConnectionProducerInitializedEvent;
-import won.rdfimport.event.NeedCreationSkippedEvent;
-import won.rdfimport.event.NeedGenerationFinishedEvent;
+import won.rdfimport.event.AtomCreationSkippedEvent;
+import won.rdfimport.event.AtomGenerationFinishedEvent;
 import won.rdfimport.event.StartCreatingConnectionsCommandEvent;
-import won.rdfimport.event.StartCreatingNeedsCommandEvent;
+import won.rdfimport.event.StartCreatingAtomsCommandEvent;
 
 
 /**
  * Created by fkleedorfer on 21.03.2017.
  */
 public class RdfImportBot extends EventBot {
-    private static final String NAME_INTERNAL_ID_TO_NEEDS = "id2needs";
+    private static final String NAME_INTERNAL_ID_TO_ATOMS = "id2atoms";
     private static final String NAME_EXPECTED_INCOMING_CONNECT = "expectedConnnectFromTo";
     private static final String NAME_PROCESSED_CONNECTIONS = "processedConnectionsFromTo";
 
@@ -115,24 +115,24 @@ public class RdfImportBot extends EventBot {
 
     @Override
     protected void initializeEventListeners() {
-        boolean skipNeedCreation = false;
+        boolean skipAtomCreation = false;
         final EventListenerContext ctx = getEventListenerContext();
 
         final EventBus bus = getEventBus();
         Counter messagesInflightCounter = new CounterImpl("messagesInflightCounter");
-        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
-        bus.subscribe(CreateNeedCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(CreateAtomCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
+        bus.subscribe(CreateAtomCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
         bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messagesInflightCounter)));
         bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new DecrementCounterAction(ctx, messagesInflightCounter)));
         Counter messageCommandCounter = new CounterImpl("MessageCommandCounter");
         bus.subscribe(MessageCommandEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, messageCommandCounter)));
-        final Counter needCreationSuccessfulCounter = new CounterImpl("needsCreated");
-        final Counter needCreationSkippedCounter = new CounterImpl("needCreationSkipped");
-        final Counter needCreationFailedCounter = new CounterImpl("needCreationFailed");
-        final Counter needCreationStartedCounter = new CounterImpl("creationStarted");
+        final Counter atomCreationSuccessfulCounter = new CounterImpl("atomsCreated");
+        final Counter atomCreationSkippedCounter = new CounterImpl("atomCreationSkipped");
+        final Counter atomCreationFailedCounter = new CounterImpl("atomCreationFailed");
+        final Counter atomCreationStartedCounter = new CounterImpl("creationStarted");
         
         //create a targeted counter that will publish an event when the target is reached
-        //in this case, 0 unfinished need creations means that all needs were created
+        //in this case, 0 unfinished atom creations means that all atoms were created
         final TargetCounterDecorator creationUnfinishedCounter = new TargetCounterDecorator(ctx, new CounterImpl("creationUnfinished"), 0);
 
         Iterator<ConnectionToCreate>[] connectionToCreateIteratorWrapper = new Iterator[1]; //will be created by one of the actions below
@@ -140,104 +140,104 @@ public class RdfImportBot extends EventBot {
         //if we receive a message command failure, log it
         bus.subscribe(MessageCommandFailureEvent.class, new ActionOnEventListener(ctx, new LogMessageCommandFailureAction(ctx)));
         //if we receive a message command, execute it
-        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteCreateNeedCommandAction(ctx)));
+        bus.subscribe(CreateAtomCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteCreateAtomCommandAction(ctx)));
         bus.subscribe(ConnectCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteConnectCommandAction(ctx)));
         bus.subscribe(OpenCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteOpenCommandAction(ctx)));
         bus.subscribe(FeedbackCommandEvent.class, new ActionOnEventListener(ctx, new ExecuteFeedbackCommandAction(ctx)));
 
         //use a trigger that can only fire N times before being allowed more firings (controlling the speed)
-        FireCountLimitedBotTrigger createNeedTrigger = new FireCountLimitedBotTrigger(ctx, Duration.ofMillis(100), maxInflightCount);
+        FireCountLimitedBotTrigger createAtomTrigger = new FireCountLimitedBotTrigger(ctx, Duration.ofMillis(100), maxInflightCount);
         // each time we hear back from a connect, allow the trigger to fire once more
-        bus.subscribe(CreateNeedCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createNeedTrigger, 1)));
-        createNeedTrigger.activate();
+        bus.subscribe(CreateAtomCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createAtomTrigger, 1)));
+        createAtomTrigger.activate();
 
-        bus.subscribe(StartCreatingNeedsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createNeedTrigger))));
+        bus.subscribe(StartCreatingAtomsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(createAtomTrigger))));
 
-        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createNeedTrigger, new BaseEventBotAction(ctx) {
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, createAtomTrigger, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                NeedProducer needProducer = getEventListenerContext().getNeedProducer();
-                Dataset model = needProducer.create();
-                if (model == null && needProducer.isExhausted()) {
-                    bus.publish(new NeedProducerExhaustedEvent());
+                AtomProducer atomProducer = getEventListenerContext().getAtomProducer();
+                Dataset model = atomProducer.create();
+                if (model == null && atomProducer.isExhausted()) {
+                    bus.publish(new AtomProducerExhaustedEvent());
                     bus.unsubscribe(executingListener);
                     return;
                 }
-                URI needUriFromProducer = null;
-                Resource needResource = WonRdfUtils.NeedUtils.getNeedResource(model);
-                if (needResource.isURIResource()) {
-                    needUriFromProducer = URI.create(needResource.getURI().toString());
+                URI atomUriFromProducer = null;
+                Resource atomResource = WonRdfUtils.AtomUtils.getAtomResource(model);
+                if (atomResource.isURIResource()) {
+                    atomUriFromProducer = URI.create(atomResource.getURI().toString());
                 }
-                if (needUriFromProducer != null) {
-                    String needURI = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
-                            needUriFromProducer.toString());
-                    if (needURI != null) {
-                        bus.publish(new NeedCreationSkippedEvent());
+                if (atomUriFromProducer != null) {
+                    String atomURI = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_ATOMS,
+                            atomUriFromProducer.toString());
+                    if (atomURI != null) {
+                        bus.publish(new AtomCreationSkippedEvent());
                     } else {
-                        bus.publish(new CreateNeedCommandEvent(model, getBotContextWrapper().getNeedCreateListName(), false, false));
+                        bus.publish(new CreateAtomCommandEvent(model, getBotContextWrapper().getAtomCreateListName(), false, false));
                     }
                 }
             }
         }));
 
-        bus.subscribe(CreateNeedCommandEvent.class, new ActionOnEventListener(ctx, new MultipleActions(ctx,
-                new IncrementCounterAction(ctx, needCreationStartedCounter),
+        bus.subscribe(CreateAtomCommandEvent.class, new ActionOnEventListener(ctx, new MultipleActions(ctx,
+                new IncrementCounterAction(ctx, atomCreationStartedCounter),
                 new IncrementCounterAction(ctx, creationUnfinishedCounter))));
 
 
 
-        //when a need is created, we have to remember the association between the need's original URI and the URI it has online
-        bus.subscribe(CreateNeedCommandSuccessEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+        //when an atom is created, we have to remember the association between the atom's original URI and the URI it has online
+        bus.subscribe(CreateAtomCommandSuccessEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                if (event instanceof CreateNeedCommandSuccessEvent) {
-                    CreateNeedCommandSuccessEvent needCreatedEvent = (CreateNeedCommandSuccessEvent) event;
-                    getBotContextWrapper().getBotContext().saveToObjectMap(NAME_INTERNAL_ID_TO_NEEDS,
-                            needCreatedEvent.getNeedUriBeforeCreation().toString(),
-                            needCreatedEvent.getNeedURI().toString());
+                if (event instanceof CreateAtomCommandSuccessEvent) {
+                    CreateAtomCommandSuccessEvent atomCreatedEvent = (CreateAtomCommandSuccessEvent) event;
+                    getBotContextWrapper().getBotContext().saveToObjectMap(NAME_INTERNAL_ID_TO_ATOMS,
+                            atomCreatedEvent.getAtomUriBeforeCreation().toString(),
+                            atomCreatedEvent.getAtomURI().toString());
                 }
             }
         }));
 
         //also, keep track of what worked and what didn't
-        bus.subscribe(CreateNeedCommandFailureEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationFailedCounter)));
-        bus.subscribe(CreateNeedCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationSuccessfulCounter)));
-        bus.subscribe(NeedCreationSkippedEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, needCreationSkippedCounter)));
+        bus.subscribe(CreateAtomCommandFailureEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, atomCreationFailedCounter)));
+        bus.subscribe(CreateAtomCommandSuccessEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, atomCreationSuccessfulCounter)));
+        bus.subscribe(AtomCreationSkippedEvent.class, new ActionOnEventListener(ctx, new IncrementCounterAction(ctx, atomCreationSkippedCounter)));
 
-        //when a need is created (or it failed), decrement the halfCreatedNeed counter
+        //when an atom is created (or it failed), decrement the halfCreatedAtom counter
         EventListener downCounter = new ActionOnEventListener(ctx, "downCounter",
                 new DecrementCounterAction(ctx, creationUnfinishedCounter));
-        //count a successful need creation
-        bus.subscribe(CreateNeedCommandSuccessEvent.class, downCounter);
+        //count a successful atom creation
+        bus.subscribe(CreateAtomCommandSuccessEvent.class, downCounter);
         //if a creation failed, we don't want to keep us from keeping the correct count
-        bus.subscribe(CreateNeedCommandFailureEvent.class, downCounter);
+        bus.subscribe(CreateAtomCommandFailureEvent.class, downCounter);
 
-        //trigger statistics logging about need generation
-        BotTrigger needCreationStatsLoggingTrigger = new BotTrigger(ctx, Duration.ofSeconds(10));
+        //trigger statistics logging about atom generation
+        BotTrigger atomCreationStatsLoggingTrigger = new BotTrigger(ctx, Duration.ofSeconds(10));
         
-        needCreationStatsLoggingTrigger.activate();
-        bus.subscribe(StartCreatingNeedsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(needCreationStatsLoggingTrigger))));
-        //just do some logging when a need is created
-        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "creationStatsLogger", needCreationStatsLoggingTrigger, new BaseEventBotAction(ctx) {
+        atomCreationStatsLoggingTrigger.activate();
+        bus.subscribe(StartCreatingAtomsCommandEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StartBotTriggerCommandEvent(atomCreationStatsLoggingTrigger))));
+        //just do some logging when an atom is created
+        bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "creationStatsLogger", atomCreationStatsLoggingTrigger, new BaseEventBotAction(ctx) {
             volatile int lastOutput = 0;
             volatile long lastOutputMillis = System.currentTimeMillis();
 
             @Override
             protected void doRun(final Event event, EventListener executingListener) throws Exception {
-                int cnt = needCreationStartedCounter.getCount();
+                int cnt = atomCreationStartedCounter.getCount();
                 long now = System.currentTimeMillis();
                 long millisSinceLastOutput = now-lastOutputMillis;
                 int countSinceLastOutput = cnt-lastOutput;
                 double countPerSecond = (double) countSinceLastOutput / ((double) millisSinceLastOutput / 1000d);
-                logger.info("progress on need creation: total:{}, successful: {}, failed: {}, still waiting for response: {}, skipped: {}, messages inflight: {} (max: {}), create trigger delay: {} millis, millis since last output: {}, started since last ouput: {} ({} per second)",
+                logger.info("progress on atom creation: total:{}, successful: {}, failed: {}, still waiting for response: {}, skipped: {}, messages inflight: {} (max: {}), create trigger delay: {} millis, millis since last output: {}, started since last ouput: {} ({} per second)",
                         new Object[]{cnt,
-                                needCreationSuccessfulCounter.getCount(),
-                                needCreationFailedCounter.getCount(),
+                                atomCreationSuccessfulCounter.getCount(),
+                                atomCreationFailedCounter.getCount(),
                                 creationUnfinishedCounter.getCount(),
-                                needCreationSkippedCounter.getCount(),
+                                atomCreationSkippedCounter.getCount(),
                                 messagesInflightCounter.getCount(),
                                 maxInflightCount,
-                                createNeedTrigger.getInterval().toMillis(),
+                                createAtomTrigger.getInterval().toMillis(),
                                 millisSinceLastOutput,
                                 countSinceLastOutput,
                                 String.format("%.2f", countPerSecond)});
@@ -246,32 +246,32 @@ public class RdfImportBot extends EventBot {
             }
         }));
 
-        //stop the stats logging trigger when need generation is finished
-        bus.subscribe(NeedGenerationFinishedEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StopBotTriggerCommandEvent(needCreationStatsLoggingTrigger))));
+        //stop the stats logging trigger when atom generation is finished
+        bus.subscribe(AtomGenerationFinishedEvent.class, new ActionOnFirstEventListener(ctx, new PublishEventAction(ctx, new StopBotTriggerCommandEvent(atomCreationStatsLoggingTrigger))));
 
-        //when the needproducer is exhausted, we have to wait until all unfinished need creations finish
-        //when they do, the NeedGenerationFinishedEvent is published
-        bus.subscribe(NeedProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
+        //when the atomproducer is exhausted, we have to wait until all unfinished atom creations finish
+        //when they do, the AtomGenerationFinishedEvent is published
+        bus.subscribe(AtomProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                //when we're called, there probably are need creations unfinished, but there may not be
+                //when we're called, there probably are atom creations unfinished, but there may not be
                 //a)
-                //first, prepare for the case when there are unfinished need creations:
+                //first, prepare for the case when there are unfinished atom creations:
                 //we register a listener, waiting for the unfinished counter to reach 0
-                EventListener waitForUnfinishedNeedsListener = new ActionOnFirstEventListener(ctx, new TargetCounterFilter(creationUnfinishedCounter), new PublishEventAction(ctx, new NeedGenerationFinishedEvent()));
-                bus.subscribe(TargetCountReachedEvent.class, waitForUnfinishedNeedsListener);
+                EventListener waitForUnfinishedAtomsListener = new ActionOnFirstEventListener(ctx, new TargetCounterFilter(creationUnfinishedCounter), new PublishEventAction(ctx, new AtomGenerationFinishedEvent()));
+                bus.subscribe(TargetCountReachedEvent.class, waitForUnfinishedAtomsListener);
                 //now, we can check if we've already reached the target
                 if (creationUnfinishedCounter.getCount() <= 0) {
-                    //ok, turned out we didn't need that listener
-                    bus.unsubscribe(waitForUnfinishedNeedsListener);
-                    bus.publish(new NeedGenerationFinishedEvent());
+                    //ok, turned out we didn't atom that listener
+                    bus.unsubscribe(waitForUnfinishedAtomsListener);
+                    bus.publish(new AtomGenerationFinishedEvent());
                 }
             }
         }));
 
-        //When the needproducer is exhausted, stop the creator.
-        getEventBus().subscribe(NeedProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx,
-                new PublishEventAction(ctx, new StopBotTriggerCommandEvent(createNeedTrigger))));
+        //When the atomproducer is exhausted, stop the creator.
+        getEventBus().subscribe(AtomProducerExhaustedEvent.class, new ActionOnFirstEventListener(ctx,
+                new PublishEventAction(ctx, new StopBotTriggerCommandEvent(createAtomTrigger))));
 
         //initialize the connection iterator
         bus.subscribe(InitializeEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
@@ -286,18 +286,18 @@ public class RdfImportBot extends EventBot {
 
         //the connection creator creates one connection each time it runs, data is obtained from the connectionToCreate iterator
 
-        //wait for two things: need creation to finish and the connection info to be available,
+        //wait for two things: atom creation to finish and the connection info to be available,
         //then publish the StartCreatingConnectionsCommandEvent
         EventListener connectionCreationStarter = new ActionOnceAfterNEventsListener(ctx, 2, new PublishEventAction(ctx, new StartCreatingConnectionsCommandEvent()));
-        bus.subscribe(NeedGenerationFinishedEvent.class, connectionCreationStarter);
+        bus.subscribe(AtomGenerationFinishedEvent.class, connectionCreationStarter);
         bus.subscribe(ConnectionProducerInitializedEvent.class, connectionCreationStarter);
 
         //use a trigger that can only fire N times before being allowed more firings (controlling the speed)
         FireCountLimitedBotTrigger createConnectionsTrigger = new FireCountLimitedBotTrigger(ctx, Duration.ofMillis(100), maxInflightCount);
         // each time we hear back from a connect, allow the trigger to fire once more
-        bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createNeedTrigger, 1)));
+        bus.subscribe(ConnectCommandResultEvent.class, new ActionOnEventListener(ctx, new AddFiringsAction(ctx, createAtomTrigger, 1)));
 
-        //start the connections trigger when we are done creating needs.
+        //start the connections trigger when we are done creating atoms.
         bus.subscribe(StartCreatingConnectionsCommandEvent.class, new ActionOnFirstEventListener(ctx, new BaseEventBotAction(ctx) {
           @Override
           protected void doRun(Event event, EventListener executingListener) throws Exception {
@@ -315,8 +315,8 @@ public class RdfImportBot extends EventBot {
                 if (connectionToCreateIterator == null) return;
 
                 ConnectionToCreate connectionToCreate = null;
-                String ownNeedUriString = null;
-                String remoteNeedUriString = null;
+                String ownAtomUriString = null;
+                String targetAtomUriString = null;
                 while (connectionToCreate == null) {
                     connectionToCreate = connectionToCreateIterator.next();
                     if (connectionToCreate == null) {
@@ -326,27 +326,27 @@ public class RdfImportBot extends EventBot {
                         return;
                     }
 
-                    ownNeedUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdFrom().getURI().toString());
-                    remoteNeedUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_NEEDS, connectionToCreate.getInternalIdTo().getURI().toString());
-                    List<Object> processedConnections = getBotContextWrapper().getBotContext().loadFromListMap(NAME_PROCESSED_CONNECTIONS, ownNeedUriString);
-                    if (processedConnections.contains(remoteNeedUriString)){
+                    ownAtomUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_ATOMS, connectionToCreate.getInternalIdFrom().getURI().toString());
+                    targetAtomUriString = (String) getBotContextWrapper().getBotContext().loadFromObjectMap(NAME_INTERNAL_ID_TO_ATOMS, connectionToCreate.getInternalIdTo().getURI().toString());
+                    List<Object> processedConnections = getBotContextWrapper().getBotContext().loadFromListMap(NAME_PROCESSED_CONNECTIONS, ownAtomUriString);
+                    if (processedConnections.contains(targetAtomUriString)){
                         //we've already processed this connection in an earlier run of the bot
                         bus.publish(new ConnectionCreationSkippedEvent());
                         return;
                     }
-                    if (ownNeedUriString == null) {
-                        logger.debug("cannot make connection from internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdFrom());
+                    if (ownAtomUriString == null) {
+                        logger.debug("cannot make connection from internal id {} because mapping to published atom URI is missing", connectionToCreate.getInternalIdFrom());
                         connectionToCreate = null;
-                    } else if (remoteNeedUriString == null) {
-                        logger.debug("cannot make connection to internal id {} because mapping to published need URI is missing", connectionToCreate.getInternalIdTo());
+                    } else if (targetAtomUriString == null) {
+                        logger.debug("cannot make connection to internal id {} because mapping to published atom URI is missing", connectionToCreate.getInternalIdTo());
                         connectionToCreate = null;
                     }
                 }
 
                 if (connectionToCreate != null) {
-                    URI ownNeedURI = URI.create(ownNeedUriString);
-                    URI remoteNeedURI = URI.create(remoteNeedUriString);
-                    ConnectCommandEvent command = new ConnectCommandEvent(ownNeedURI, remoteNeedURI);
+                    URI ownAtomURI = URI.create(ownAtomUriString);
+                    URI targetAtomURI = URI.create(targetAtomUriString);
+                    ConnectCommandEvent command = new ConnectCommandEvent(ownAtomURI, targetAtomURI);
                     bus.publish(command);
                 }
             }
@@ -359,14 +359,14 @@ public class RdfImportBot extends EventBot {
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) event;
                 getBotContextWrapper().getBotContext().addToListMap(NAME_EXPECTED_INCOMING_CONNECT,
-                        connectCommandEvent.getRemoteNeedURI().toString(),
-                        connectCommandEvent.getNeedURI().toString());
+                        connectCommandEvent.getTargetAtomURI().toString(),
+                        connectCommandEvent.getAtomURI().toString());
             }
         }));
 
 
 
-        //if the ConnectCommand fails, we have to remove the association between the two needs because the
+        //if the ConnectCommand fails, we have to remove the association between the two atoms because the
         //connect we're waiting for will never happen
         bus.subscribe(ConnectCommandFailureEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx){
             @Override
@@ -374,8 +374,8 @@ public class RdfImportBot extends EventBot {
                 ConnectCommandFailureEvent connectCommandFailureEvent = (ConnectCommandFailureEvent) event;
                 ConnectCommandEvent connectCommandEvent = (ConnectCommandEvent) connectCommandFailureEvent.getOriginalCommandEvent();
                 getBotContextWrapper().getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
-                        connectCommandEvent.getRemoteNeedURI().toString(),
-                        connectCommandEvent.getNeedURI().toString());
+                        connectCommandEvent.getTargetAtomURI().toString(),
+                        connectCommandEvent.getAtomURI().toString());
             }
         }));
 
@@ -383,34 +383,34 @@ public class RdfImportBot extends EventBot {
 
         //if we receive a connect message, we have to check if it's an expected one
         //if so, accept and remove the association from our botContext.
-        bus.subscribe(ConnectFromOtherNeedEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+        bus.subscribe(ConnectFromOtherAtomEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                ConnectFromOtherNeedEvent connectEvent = (ConnectFromOtherNeedEvent) event;
-                List<Object> expectedUriStrings = getBotContextWrapper().getBotContext().loadFromListMap(NAME_EXPECTED_INCOMING_CONNECT, connectEvent.getNeedURI().toString());
+                ConnectFromOtherAtomEvent connectEvent = (ConnectFromOtherAtomEvent) event;
+                List<Object> expectedUriStrings = getBotContextWrapper().getBotContext().loadFromListMap(NAME_EXPECTED_INCOMING_CONNECT, connectEvent.getAtomURI().toString());
                 if (expectedUriStrings == null) {
-                    logger.debug("ignoring connect received on behalf of need {} from remote need {} because we're not expecting to be contacted by that need.", connectEvent.getNeedURI(), connectEvent.getRemoteNeedURI());
+                    logger.debug("ignoring connect received on behalf of atom {} from remote atom {} because we're not expecting to be contacted by that atom.", connectEvent.getAtomURI(), connectEvent.getTargetAtomURI());
                     return;
                 }
-                if (! expectedUriStrings.contains(connectEvent.getRemoteNeedURI().toString())) {
-                    logger.debug("ignoring connect received on behalf of need {} from remote need {} because we're not expecting to be contacted by that need", connectEvent.getNeedURI(), connectEvent.getRemoteNeedURI());
+                if (! expectedUriStrings.contains(connectEvent.getTargetAtomURI().toString())) {
+                    logger.debug("ignoring connect received on behalf of atom {} from remote atom {} because we're not expecting to be contacted by that atom", connectEvent.getAtomURI(), connectEvent.getTargetAtomURI());
                     return;
                 }
                 Connection con = connectEvent.getCon();
                 bus.publish(new OpenCommandEvent(con));
                 getBotContextWrapper().getBotContext().removeFromListMap(NAME_EXPECTED_INCOMING_CONNECT,
-                        connectEvent.getRemoteNeedURI().toString(),
-                        connectEvent.getNeedURI().toString());
+                        connectEvent.getTargetAtomURI().toString(),
+                        connectEvent.getAtomURI().toString());
                 }
             }
         ));
 
-        //we send the feedback after we've received the open command from the need we connected to
-        bus.subscribe(OpenFromOtherNeedEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
+        //we send the feedback after we've received the open command from the atom we connected to
+        bus.subscribe(OpenFromOtherAtomEvent.class, new ActionOnEventListener(ctx, new BaseEventBotAction(ctx) {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
-                Connection con = ((OpenFromOtherNeedEvent)event).getCon();
-                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WON.HAS_BINARY_RATING.getURI()), URI.create(WON.GOOD.getURI())));
+                Connection con = ((OpenFromOtherAtomEvent)event).getCon();
+                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WON.binaryRating.getURI()), URI.create(WON.Good.getURI())));
             }
         }));
 
@@ -421,8 +421,8 @@ public class RdfImportBot extends EventBot {
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 FeedbackCommandSuccessEvent feedbackCommandSuccessEvent = (FeedbackCommandSuccessEvent) event;
                 getBotContextWrapper().getBotContext().addToListMap(NAME_PROCESSED_CONNECTIONS,
-                        feedbackCommandSuccessEvent.getNeedURI().toString(),
-                        feedbackCommandSuccessEvent.getRemoteNeedURI().toString());
+                        feedbackCommandSuccessEvent.getAtomURI().toString(),
+                        feedbackCommandSuccessEvent.getTargetAtomURI().toString());
             }
         }));
 
@@ -503,10 +503,10 @@ public class RdfImportBot extends EventBot {
         bus.subscribe(BotTriggerEvent.class, new ActionOnTriggerEventListener(ctx, "statslogger", statisticsLoggingTrigger, new StatisticsLoggingAction(ctx)));
         bus.publish(new StartBotTriggerCommandEvent(statisticsLoggingTrigger));
 
-        if (skipNeedCreation) {
+        if (skipAtomCreation) {
             bus.publish(new StartCreatingConnectionsCommandEvent());
         } else {
-            bus.publish(new StartCreatingNeedsCommandEvent());
+            bus.publish(new StartCreatingAtomsCommandEvent());
         }
     }
 

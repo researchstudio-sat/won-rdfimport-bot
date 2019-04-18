@@ -25,18 +25,18 @@ import org.junit.Test;
 
 public class ConnectionToCreateFromRdfProducerTest{
     @Test
-    public void testNeedAndRemoteNeedOnly(){
+    public void testAtomAndTargetAtomOnly(){
         Model model = ModelFactory.createDefaultModel();
         RDFDataMgr.read(model, "src/test/resources/connections/set1/42c3083a707fc517f0735ffb71001f50c4f9d89e26f0249080d43441a9e0783e.ttl");
         ConnectionToCreateFromRdfProducer producer = new ConnectionToCreateFromRdfProducer();
         ConnectionToCreate connectionToCreate = producer.makeConnectionToCreate(model);
-        Assert.assertEquals("https://node.matchat.org/won/resource/need/20c9a0395c9688e5a2b158c220bd844c2ddfc34b4bac4fa23bb413affd1268dc",connectionToCreate.getInternalIdFrom().getURI());
-        Assert.assertEquals("https://node.matchat.org/won/resource/need/b605499411b0a915ddee773de321c843bb3a448d754abd76b7d470ed1f55c988",connectionToCreate.getInternalIdTo().getURI());
+        Assert.assertEquals("https://node.matchat.org/won/resource/atom/20c9a0395c9688e5a2b158c220bd844c2ddfc34b4bac4fa23bb413affd1268dc",connectionToCreate.getInternalIdFrom().getURI());
+        Assert.assertEquals("https://node.matchat.org/won/resource/atom/b605499411b0a915ddee773de321c843bb3a448d754abd76b7d470ed1f55c988",connectionToCreate.getInternalIdTo().getURI());
         Assert.assertNull(connectionToCreate.getState());
         Assert.assertNotNull(connectionToCreate.getFeedback());
         ConnectionToCreate.Feedback feedback = connectionToCreate.getFeedback();
         Assert.assertEquals("http://linked.opendata.cz/resource/isvz.cz/connection/20c9a0395c9688e5a2b158c220bd844c2ddfc34b4bac4fa23bb413affd1268dc", feedback.getInternalIdRated().getURI());
-        Assert.assertEquals("http://purl.org/webofneeds/model#hasBinaryRating", feedback.getRatingProperty().getURI());
-        Assert.assertEquals("http://purl.org/webofneeds/model#Good", feedback.getRatingValue().asResource().getURI());
+        Assert.assertEquals("https://w3id.org/won/core#binaryRating", feedback.getRatingProperty().getURI());
+        Assert.assertEquals("https://w3id.org/won/core#Good", feedback.getRatingValue().asResource().getURI());
     }
 }

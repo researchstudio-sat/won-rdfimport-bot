@@ -30,7 +30,7 @@ import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * NeedProducer that is configured to read needs from a directory.
+ * AtomProducer that is configured to read atoms from a directory.
  */
 public class DirectoryBasedConnectionToCreateProducer implements ConnectionToCreateProducer {
     private static final int NOT_INITIALIZED = -1;
@@ -105,7 +105,7 @@ public class DirectoryBasedConnectionToCreateProducer implements ConnectionToCre
 
         private ConnectionToCreate makeConnectionToCreate(final int fileIndexToUse) {
             Model model = readModel(fileIndexToUse);
-            //find the 'own need'
+            //find the 'own atom'
             return fromRdfProducer.makeConnectionToCreate(model);
         }
 
@@ -117,7 +117,7 @@ public class DirectoryBasedConnectionToCreateProducer implements ConnectionToCre
                 RDFDataMgr.read(model, files[fileIndexToUse].getAbsolutePath());
                 return model;
             } catch (Exception e) {
-                logger.debug("could not read need from file {}", files[fileIndexToUse]);
+                logger.debug("could not read atom from file {}", files[fileIndexToUse]);
             }
             return null;
         }

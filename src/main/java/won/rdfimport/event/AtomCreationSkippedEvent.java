@@ -19,8 +19,8 @@ package won.rdfimport.event;
 import won.bot.framework.eventbot.event.BaseEvent;
 
 /**
- * Indicates that the bot skipped need creation.
+ * Indicates that the bot skipped atom creation.
  */
-public class NeedCreationSkippedEvent extends BaseEvent {
+public class AtomCreationSkippedEvent extends BaseEvent {
 
 }
