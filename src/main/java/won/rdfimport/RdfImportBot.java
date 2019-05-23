@@ -15,6 +15,7 @@
  */
 
 package won.rdfimport;
+import won.protocol.vocabulary.WONCON;
 
 import java.net.URI;
 import java.time.Duration;
@@ -410,7 +411,7 @@ public class RdfImportBot extends EventBot {
             @Override
             protected void doRun(Event event, EventListener executingListener) throws Exception {
                 Connection con = ((OpenFromOtherAtomEvent)event).getCon();
-                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WON.binaryRating.getURI()), URI.create(WON.Good.getURI())));
+                bus.publish(new FeedbackCommandEvent(con, con.getConnectionURI(), URI.create(WONCON.binaryRating.getURI()), URI.create(WONCON.Good.getURI())));
             }
         }));
 

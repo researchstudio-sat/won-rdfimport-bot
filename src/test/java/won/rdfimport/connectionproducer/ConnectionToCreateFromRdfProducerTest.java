@@ -36,7 +36,7 @@ public class ConnectionToCreateFromRdfProducerTest{
         Assert.assertNotNull(connectionToCreate.getFeedback());
         ConnectionToCreate.Feedback feedback = connectionToCreate.getFeedback();
         Assert.assertEquals("http://linked.opendata.cz/resource/isvz.cz/connection/20c9a0395c9688e5a2b158c220bd844c2ddfc34b4bac4fa23bb413affd1268dc", feedback.getInternalIdRated().getURI());
-        Assert.assertEquals("https://w3id.org/won/core#binaryRating", feedback.getRatingProperty().getURI());
-        Assert.assertEquals("https://w3id.org/won/core#Good", feedback.getRatingValue().asResource().getURI());
+        Assert.assertEquals("https://w3id.org/won/content#binaryRating", feedback.getRatingProperty().getURI());
+        Assert.assertEquals("https://w3id.org/won/content#Good", feedback.getRatingValue().asResource().getURI());
     }
 }
