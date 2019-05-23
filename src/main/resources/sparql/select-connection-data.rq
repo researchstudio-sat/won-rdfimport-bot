@@ -1,3 +1,4 @@
+PREFIX con: <https://w3id.org/won/content#>
 prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 prefix won: <https://w3id.org/won/core#>
 select ?atom ?targetAtom ?connection ?state ?rated ?ratingProperty ?ratingValue where {
@@ -7,9 +8,9 @@ select ?atom ?targetAtom ?connection ?state ?rated ?ratingProperty ?ratingValue 
       ?connection won:atomState ?state.
     }
   	optional {
-      ?connection won:feedbackEvent ?event.
-      ?event won:feedback ?feedback.
-      ?feedback won:forResource ?rated;
+      ?connection con:feedbackEvent ?event.
+      ?event con:feedback ?feedback.
+      ?feedback con:feedbackTarget ?rated;
                 ?ratingProperty ?ratingValue.
       filter (?rated != ?ratingValue)
     }
