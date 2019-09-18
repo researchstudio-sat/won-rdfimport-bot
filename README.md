@@ -5,11 +5,9 @@ The RDF data to be imported must be made available as a set of files in any RDF 
 The bot must be able to make a network connection to at least one WoN node. It is not required that they run on the same machine.
 
 ## Configuration
-The recommended way of configuring the bot is to copy the `conf` folder to `conf.local` and then make changes in that new folder.
+The bot reads files from its [configured](src/main/resources/application.properties) input folder for atoms, which are published on the WoN node set with the `WON_NODE_URI` Parameter. Then, the [configured](src/main/resources/application.properties) import folder for connections is read in and for each file, one connection is created. 
 
-The bot reads files from its [configured](conf/rdfimport-bot.properties) input folder for atoms, which are published on the WoN nodes the bot is [configured to use](conf/node-uri-source.properties). Then, the [configured](conf/rdfimport-bot.properties) import folder for connections is read in and for each file, one connection is created. 
-
-With the default configuration, the bot keeps its application state in memory, so it cannot keep state over multiple consecutive runs. Changing the config property `botContext.impl` to `mongoBotContext` in [`bot.properties`](conf/bot.properties)) tells the bot to store its application state in the configured mongo db instance (default: user `won`, password `won`, which atoms write access to the database `won`). Doing that will cause the bot to skip creating atoms and connections it has already created in an earlier run. 
+With the default configuration, the bot keeps its application state in memory, so it cannot keep state over multiple consecutive runs. Changing the config property `botContext.impl` to `mongoBotContext` in [`application.properties`](src/main/resources/application.properties) tells the bot to store its application state in the configured mongo db instance (make sure to uncomment and adapt the properties `botContext.mongodb.*` accordingly). Doing that will cause the bot to skip creating atoms and connections it has already created in an earlier run. 
 
 
 
