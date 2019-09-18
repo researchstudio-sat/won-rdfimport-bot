@@ -20,9 +20,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>at.researchstudio.sat</groupId>
+    <groupId>won.bot</groupId>
     <artifactId>won-rdfimport-bot</artifactId>
     <version>1.0-SNAPSHOT</version>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
     <dependencies>
         <dependency>
@@ -33,7 +37,7 @@
         <dependency>
             <groupId>at.researchstudio.sat</groupId>
             <artifactId>won-bot</artifactId>
-            <version>0.4-SNAPSHOT</version>
+            <version>0.5-SNAPSHOT</version>
         </dependency>
         <dependency>
             <groupId>junit</groupId>

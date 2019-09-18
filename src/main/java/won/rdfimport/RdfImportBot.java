@@ -15,8 +15,11 @@
  */
 
 package won.rdfimport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import won.protocol.vocabulary.WONCON;
 
+import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.time.Duration;
 import java.time.temporal.TemporalUnit;
@@ -97,6 +100,7 @@ import won.rdfimport.event.StartCreatingAtomsCommandEvent;
  * Created by fkleedorfer on 21.03.2017.
  */
 public class RdfImportBot extends EventBot {
+    private static final Logger logger = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass());
     private static final String NAME_INTERNAL_ID_TO_ATOMS = "id2atoms";
     private static final String NAME_EXPECTED_INCOMING_CONNECT = "expectedConnnectFromTo";
     private static final String NAME_PROCESSED_CONNECTIONS = "processedConnectionsFromTo";
