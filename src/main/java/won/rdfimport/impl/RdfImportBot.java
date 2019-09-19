@@ -14,7 +14,7 @@
  *    limitations under the License.
  */
 
-package won.rdfimport;
+package won.rdfimport.impl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import won.protocol.vocabulary.WONCON;
@@ -22,7 +22,6 @@ import won.protocol.vocabulary.WONCON;
 import java.lang.invoke.MethodHandles;
 import java.net.URI;
 import java.time.Duration;
-import java.time.temporal.TemporalUnit;
 import java.util.Iterator;
 import java.util.List;
 
@@ -58,7 +57,6 @@ import won.bot.framework.eventbot.bus.EventBus;
 import won.bot.framework.eventbot.event.Event;
 import won.bot.framework.eventbot.event.impl.command.MessageCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.MessageCommandFailureEvent;
-import won.bot.framework.eventbot.event.impl.command.MessageCommandResultEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandFailureEvent;
 import won.bot.framework.eventbot.event.impl.command.connect.ConnectCommandResultEvent;
@@ -83,8 +81,6 @@ import won.bot.framework.eventbot.listener.impl.ActionOnFirstEventListener;
 import won.bot.framework.eventbot.listener.impl.ActionOnceAfterNEventsListener;
 import won.protocol.model.Connection;
 import won.protocol.util.WonRdfUtils;
-import won.protocol.vocabulary.CNT;
-import won.protocol.vocabulary.WON;
 import won.rdfimport.connectionproducer.ConnectionToCreate;
 import won.rdfimport.connectionproducer.ConnectionToCreateProducer;
 import won.rdfimport.event.ConectionProducerExhaustedEvent;
